@@ -35,6 +35,6 @@
 	}
 
 	.unauthenticated {
-		font-family: 'Space Grotesk', system-ui, sans-serif;
+		font-family: system-ui, sans-serif;
 	}
 </style>

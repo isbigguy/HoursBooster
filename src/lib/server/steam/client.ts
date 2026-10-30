@@ -1,6 +1,7 @@
 import SteamUser from 'steam-user';
 import SteamTotp from 'steam-totp';
 import { EventEmitter } from 'node:events';
+import { jwtDecode } from 'jwt-decode';
 
 export type SteamClientStatus =
 	| 'DISCONNECTED'
@@ -17,6 +18,8 @@ export class SteamClient extends EventEmitter {
 	private accountName: string;
 	private games: number[] = [];
 	private steamGuardCallback: ((code: string) => void) | null = null;
+	private loginActive = false;
+	private stopping = false;
 
 	constructor(accountName: string, options?: { dataDirectory?: string | null }) {
 		super();
@@ -36,6 +39,7 @@ export class SteamClient extends EventEmitter {
 
 	private setupListeners() {
 		this.client.on('loggedOn', () => {
+			if (!this.loginActive) return;
 			console.log(`[SteamClient] ${this.accountName} logged on.`);
 			this.status = 'ONLINE';
 			this.client.setPersona(this.personaState);
@@ -48,21 +52,26 @@ export class SteamClient extends EventEmitter {
 			this.emit('refreshToken', token);
 		});
 
-		this.client.on('error', (err: Error) => {
-			console.error(`[SteamClient] ${this.accountName} error:`, err);
+		this.client.on('error', () => {
+			console.error('[SteamClient] Steam connection failed');
+			this.loginActive = false;
+			this.steamGuardCallback = null;
 			this.status = 'ERROR';
 			this.emit('status', 'ERROR');
 		});
 
-		this.client.on('disconnected', (eresult: number, msg: string) => {
-			console.log(`[SteamClient] ${this.accountName} disconnected: ${msg} (${eresult})`);
+		this.client.on('disconnected', () => {
+			this.steamGuardCallback = null;
+			if (this.stopping) return;
 			if (this.status !== 'ERROR') {
-				this.status = 'DISCONNECTED';
-				this.emit('status', 'DISCONNECTED');
+				// steam-user owns reconnect attempts after a transient disconnection.
+				this.status = this.loginActive ? 'CONNECTING' : 'DISCONNECTED';
+				this.emit('status', this.status);
 			}
 		});
 
 		this.client.on('steamGuard', (domain: string | null, callback: (code: string) => void) => {
+			if (!this.loginActive) return;
 			console.log(
 				`[SteamClient] ${this.accountName} waiting for Steam Guard code ${domain ? `(${domain})` : ''}`
 			);
@@ -71,16 +80,26 @@ export class SteamClient extends EventEmitter {
 			this.emit('status', 'WAITING_FOR_CODE');
 		});
 
-		this.client.on('friendMessage', (senderID: any, message: string) => {
+		this.client.chat.on('friendMessage', async (incoming: any) => {
+			if (!this.loginActive) return;
+			const senderID = incoming.steamid_friend;
+			const message = incoming.message;
 			const steamId = senderID.getSteamID64();
-			console.log(`[SteamClient] ${this.accountName} received message from ${steamId}: ${message}`);
 
 			this.emit('message', { steamId, message });
 
 			if (this.autoReplyMessage) {
-				console.log(`[SteamClient] ${this.accountName} sending auto-reply to ${steamId}`);
-				this.client.chatMessage(senderID, this.autoReplyMessage);
-				this.emit('message', { steamId, message: this.autoReplyMessage, direction: 'outgoing' });
+				const reply = this.autoReplyMessage;
+				try {
+					const sent = await this.client.chat.sendFriendMessage(senderID, reply);
+					this.emit('message', {
+						steamId,
+						message: sent.modified_message,
+						direction: 'outgoing'
+					});
+				} catch {
+					console.error('[SteamClient] Auto-reply was not accepted by Steam');
+				}
 			}
 		});
 	}
@@ -95,12 +114,23 @@ export class SteamClient extends EventEmitter {
 		refreshToken?: string | null,
 		sharedSecret?: string | null
 	) {
-		this.status = 'CONNECTING';
-		this.emit('status', 'CONNECTING');
+		if (this.isActive) return;
 
 		const logOnOptions: any = {};
 
 		if (refreshToken) {
+			// Validate format here: steam-user parses it in an async nextTick that cannot be caught.
+			const claims = jwtDecode<{ iss?: string; aud?: unknown; sub?: unknown }>(refreshToken);
+			if (
+				refreshToken.split('.').length !== 3 ||
+				claims?.iss !== 'steam' ||
+				!Array.isArray(claims.aud) ||
+				!claims.aud.includes('client') ||
+				typeof claims.sub !== 'string' ||
+				!/^\d{17}$/.test(claims.sub)
+			) {
+				throw new Error('Invalid Steam client refresh token');
+			}
 			logOnOptions.refreshToken = refreshToken;
 		} else {
 			logOnOptions.accountName = this.accountName;
@@ -109,26 +139,54 @@ export class SteamClient extends EventEmitter {
 			}
 		}
 
-		if (sharedSecret) {
+		if (sharedSecret && !refreshToken) {
 			logOnOptions.twoFactorCode = SteamTotp.generateAuthCode(sharedSecret);
 		}
 
-		this.client.logOn(logOnOptions);
+		// Reserve synchronously: steam-user defers logOn until the next tick.
+		this.loginActive = true;
+		this.status = 'CONNECTING';
+		this.emit('status', 'CONNECTING');
+		try {
+			this.client.logOn(logOnOptions);
+		} catch (failure) {
+			this.loginActive = false;
+			throw failure;
+		}
+	}
+
+	public get isActive() {
+		return this.loginActive || this.stopping || !!this.client.steamID;
 	}
 
 	public provideGuardCode(code: string) {
 		if (this.steamGuardCallback) {
-			this.steamGuardCallback(code);
+			const callback = this.steamGuardCallback;
 			this.steamGuardCallback = null;
 			this.status = 'CONNECTING';
 			this.emit('status', 'CONNECTING');
+			callback(code);
 		} else {
 			console.warn(`[SteamClient] ${this.accountName} received code but no callback available.`);
 		}
 	}
 
-	public logOff() {
-		this.client.logOff();
+	public async logOff() {
+		this.stopping = true;
+		this.loginActive = false;
+		this.steamGuardCallback = null;
+		// Let a queued logOn execute before cancelling it.
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		if (this.client.steamID) {
+			await new Promise<void>((resolve) => {
+				this.client.once('disconnected', () => setImmediate(resolve));
+				this.client.logOff();
+			});
+		} else {
+			// Connecting logins do not emit disconnected when cancelled.
+			this.client.logOff();
+		}
+		this.stopping = false;
 		this.status = 'DISCONNECTED';
 		this.emit('status', 'DISCONNECTED');
 	}
@@ -158,9 +216,7 @@ export class SteamClient extends EventEmitter {
 
 			if (gamesToPlay.length > 0) {
 				this.status = 'BOOSTING';
-				console.log(
-					`[SteamClient] ${this.accountName} started boosting: ${gamesToPlay.join(', ')}`
-				);
+				console.log('[SteamClient] Boosting started');
 			} else {
 				this.status = 'ONLINE';
 				console.log(`[SteamClient] ${this.accountName} stopped boosting.`);

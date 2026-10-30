@@ -16,8 +16,8 @@
 		loading = true;
 		error = null;
 		try {
-			await authClient.signIn.oauth2({
-				providerId: data.oidcProviderId!
+			await authClient.signIn.social({
+				provider: data.oidcProviderId!
 			});
 		} catch (err: any) {
 			console.error('OIDC Login error:', err);

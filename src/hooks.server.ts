@@ -1,12 +1,13 @@
 import { auth, isAuthEnabled } from '$lib/auth';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { building } from '$app/environment';
-import '$lib/server/setup';
+import { ready } from '$lib/server/setup';
 import type { Handle } from '@sveltejs/kit';
 
 import { createMockSession, createMockUser } from '$lib/server/mock';
 
 export const handle: Handle = async ({ event, resolve }) => {
+	await ready;
 	const session = await auth.api.getSession({
 		headers: event.request.headers
 	});
@@ -21,5 +22,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.locals.session = createMockSession() as any;
 	}
 
-	return svelteKitHandler({ event, resolve, auth, building });
+	const response = await svelteKitHandler({ event, resolve, auth, building });
+	response.headers.set('Cache-Control', 'private, no-store');
+	response.headers.set('Referrer-Policy', 'no-referrer');
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('X-Frame-Options', 'DENY');
+	return response;
 };

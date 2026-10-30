@@ -60,11 +60,6 @@
 		return date.toLocaleString();
 	};
 
-	function openSteamDB(steamIdOther: string) {
-		window.open(`https://steamdb.info/calculator/${steamIdOther}/`, '_blank');
-		openMenu = null;
-	}
-
 	function requestDeleteChat(contact: { steamIdOther: string; name: string }) {
 		contactToDelete = contact;
 		openMenu = null;
@@ -123,7 +118,6 @@
 				</button>
 				{#if openMenu === selectedContact}
 					<div class="dropdown-menu" transition:slide={{ duration: 150 }}>
-						<button onclick={() => openSteamDB(selectedContact!)}>Open SteamDB</button>
 						<button
 							class="danger"
 							onclick={() =>
@@ -197,7 +191,7 @@
 {#if contactToDelete}
 	<ConfirmModal
 		title="Delete Chat"
-		message="Are you sure you want to delete all messages with <strong>{contactToDelete.name}</strong>? <br/> This cannot be undone."
+		message="Are you sure you want to delete all messages with {contactToDelete.name}? This cannot be undone."
 		confirmText="Delete"
 		variant="danger"
 		onConfirm={confirmDeleteChat}

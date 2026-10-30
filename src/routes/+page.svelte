@@ -159,7 +159,7 @@
 	{#if accountToDelete}
 		<ConfirmModal
 			title="Delete Account"
-			message="Are you sure you want to delete <strong>{accountToDelete.accountName}</strong>? <br/> This action cannot be undone."
+			message="Are you sure you want to delete {accountToDelete.accountName}? This action cannot be undone."
 			confirmText="Delete"
 			variant="danger"
 			onConfirm={confirmDelete}

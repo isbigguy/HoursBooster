@@ -12,7 +12,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 
 	return {
 		user: locals.user,
-		session: locals.session,
 		authEnabled: isAuthEnabled()
 	};
 };
