@@ -3,6 +3,7 @@ import { test, mock, after } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { registerHooks } from 'node:module';
 import { readFileSync } from 'node:fs';
+import { format } from 'node:util';
 
 const root = new URL('../', import.meta.url);
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -135,6 +136,39 @@ test('Steam Guard callbacks are consumed once and discarded after stop or a fata
 	await instance.logOff();
 });
 
+test('Steam client lifecycle logs omit account identity and authentication material', async (t) => {
+	const output = [];
+	for (const method of ['log', 'warn', 'error'])
+		t.mock.method(console, method, (...values) => output.push(format(...values)));
+	const instance = client();
+	const password = 'synthetic-private-password';
+	const refresh = 'synthetic-private-refresh-token';
+	const domain = 'synthetic-private-mail.invalid';
+	const code = 'QWERT';
+	const supplied = [];
+	try {
+		await instance.login(password, null, seed);
+		await tick();
+		instance.client.setPersona = () => {};
+		instance.client.gamesPlayed = () => {};
+		instance.client.steamID = {};
+		instance.client.emit('loggedOn');
+		instance.client.emit('refreshToken', refresh);
+		instance.client.emit('steamGuard', domain, (value) => supplied.push(value));
+		instance.provideGuardCode(code);
+		instance.provideGuardCode(code);
+		instance.setGames([]);
+		instance.client.emit('error', new Error(password));
+		assert.deepEqual(supplied, [code]);
+		assert.ok(output.length > 0);
+		for (const secret of ['synthetic-test-account', password, refresh, domain, code, seed])
+			assert.equal(output.join('\n').includes(secret), false, 'Sensitive client log value');
+	} finally {
+		instance.client.steamID = null;
+		await instance.logOff();
+	}
+});
+
 test('new chat API saves the confirmed reply and does not report failed sends as outgoing', async () => {
 	const instance = client();
 	await instance.login(null, token());
@@ -252,7 +286,7 @@ mock.module(new URL('src/lib/server/steam/client.ts', root).href, {
 const { db } = await import('../src/lib/database.ts');
 const { steamAccount, steamChatMessage } = await import('../src/lib/server/steam/schema.ts');
 const { eq } = await import('drizzle-orm');
-const { encrypt } = await import('../src/lib/server/steam/crypto.ts');
+const { encrypt, decrypt } = await import('../src/lib/server/steam/crypto.ts');
 await db.$client.executeMultiple(
 	readFileSync(new URL('../drizzle/0000_known_supernaut.sql', import.meta.url), 'utf8')
 );
@@ -308,4 +342,57 @@ test('manager serializes duplicate starts and stop-restart, ignoring retired ses
 	assert.equal(steamManager.getClientStatus(account.id), 'ONLINE');
 	await steamManager.stopAccount(account.id);
 	assert.equal((await db.select().from(steamAccount))[0].status, 'IDLE');
+});
+
+test('manager logs omit account identity, credentials and chat during startup and updates', async (t) => {
+	const output = [];
+	for (const method of ['log', 'warn', 'error'])
+		t.mock.method(console, method, (...values) => output.push(format(...values)));
+	const id = 'synthetic-private-manager-id';
+	const name = 'synthetic-private-manager-name';
+	const message = 'synthetic-private-chat-body';
+	const refreshed = 'synthetic-private-refreshed-token';
+	const encrypted = encrypt(token());
+	await db.insert(steamAccount).values({
+		id,
+		accountName: name,
+		games: [],
+		status: 'ONLINE',
+		refreshToken: encrypted.content,
+		iv: encrypted.iv,
+		authTag: encrypted.authTag
+	});
+	try {
+		await steamManager.init();
+		const active = FakeSteamClient.instances.at(-1);
+		active.emit('refreshToken', refreshed);
+		active.emit('message', { steamId: '76561198000000001', message });
+		await tick();
+		await steamManager.updateConfig(id, { games: [730], customTitle: message });
+		const row = await db.query.steamAccount.findFirst({ where: eq(steamAccount.id, id) });
+		assert.equal(
+			decrypt({ content: row.refreshToken, iv: row.iv, authTag: row.authTag }),
+			refreshed
+		);
+		assert.equal((await db.select().from(steamChatMessage))[0].content, message);
+		const missingId = 'synthetic-private-missing-id';
+		await db
+			.insert(steamAccount)
+			.values({ id: missingId, accountName: 'synthetic-missing-name', games: [] });
+		await steamManager.startAccount(missingId);
+		assert.ok(output.length > 0);
+		for (const secret of [
+			id,
+			name,
+			message,
+			refreshed,
+			token(),
+			missingId,
+			'synthetic-missing-name',
+			'76561198000000001'
+		])
+			assert.equal(output.join('\n').includes(secret), false, 'Sensitive manager log value');
+	} finally {
+		await steamManager.stopAccount(id);
+	}
 });

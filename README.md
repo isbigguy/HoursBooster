@@ -4,7 +4,7 @@
 
 # vaporBooster
 
-Version **v0.0.2** — HTTPS-only. See [release changes](CHANGELOG.md).
+Version **v0.0.4** — HTTPS-only. See [release changes](CHANGELOG.md).
 
 ### Simple, fast and reliable hour booster for the Steam platform.
 
@@ -130,10 +130,14 @@ the `/data/sqlite.db` volume location and ensure it is owned by the container's
 ## Security changes and checks
 
 - Account operations share an ownership check, and page data excludes authentication secrets.
+- Steam account names are unique within each owner's namespace, so another user's
+  failed login cannot reserve or reveal an account name. Shared local accounts have
+  their own uniqueness constraint. The upgrade migration preserves existing rows.
 - Confirmation messages render as text. QR sessions have a captured owner, expiry,
   cancellation and bounded capacity; successful results can be consumed once.
 - No Google Fonts or SteamDB requests are made. Better Auth telemetry is explicitly disabled.
 - Steam chat text is stored for the dashboard but is not printed to process logs.
+- Steam lifecycle logs use fixed messages without account names, account IDs or Guard email domains.
 - Docker runs without root or extra capabilities, with a read-only root filesystem,
   a separate data volume and restricted Deno filesystem/process permissions.
 - Production, development and preview require HTTPS. Sessions use Secure cookies,
@@ -145,6 +149,7 @@ the `/data/sqlite.db` volume location and ensure it is owned by the container's
   needed by Steam and the configured identity/database services; this is not a network allowlist.
 
 Use Node 24 to run `pnpm test`, `pnpm check`, `pnpm lint`, and `pnpm build`.
+TLS tests require OpenSSL on PATH, or `OPENSSL_BINARY` pointing to its executable.
 The security tests use a temporary SQLite database and fake Steam sessions, never
 real credentials or live Steam login. See `SECURITY_CHANGES.ru.md` for the Russian
 change summary and deployment limitations.

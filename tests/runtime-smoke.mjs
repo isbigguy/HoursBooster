@@ -3,14 +3,17 @@ import { execFile, spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { request as httpRequest } from 'node:http';
 import { Agent, request as httpsRequest } from 'node:https';
 import { promisify } from 'node:util';
-import { parse } from 'devalue';
 import { createTlsFixture } from './helpers/tls-fixture.mjs';
+
+const kitRequire = createRequire(import.meta.resolve('@sveltejs/kit'));
+const { parse } = await import(pathToFileURL(kitRequire.resolve('devalue')));
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 await readFile(join(root, '.deno-deploy', 'deploy.json'));

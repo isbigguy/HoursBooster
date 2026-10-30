@@ -42,7 +42,7 @@ export class SteamClient extends EventEmitter {
 	private setupListeners() {
 		this.client.on('loggedOn', () => {
 			if (!this.loginActive) return;
-			console.log(`[SteamClient] ${this.accountName} logged on.`);
+			console.log('[SteamClient] Logged on');
 			this.status = 'ONLINE';
 			this.client.setPersona(this.personaState);
 			this.emit('status', 'ONLINE');
@@ -50,7 +50,7 @@ export class SteamClient extends EventEmitter {
 		});
 
 		this.client.on('refreshToken', (token: string) => {
-			console.log(`[SteamClient] ${this.accountName} received new refresh token.`);
+			console.log('[SteamClient] Received new refresh token');
 			this.emit('refreshToken', token);
 		});
 
@@ -72,11 +72,9 @@ export class SteamClient extends EventEmitter {
 			}
 		});
 
-		this.client.on('steamGuard', (domain: string | null, callback: (code: string) => void) => {
+		this.client.on('steamGuard', (_domain: string | null, callback: (code: string) => void) => {
 			if (!this.loginActive) return;
-			console.log(
-				`[SteamClient] ${this.accountName} waiting for Steam Guard code ${domain ? `(${domain})` : ''}`
-			);
+			console.log('[SteamClient] Waiting for Steam Guard code');
 			this.status = 'WAITING_FOR_CODE';
 			this.steamGuardCallback = callback;
 			this.emit('status', 'WAITING_FOR_CODE');
@@ -169,7 +167,7 @@ export class SteamClient extends EventEmitter {
 			this.emit('status', 'CONNECTING');
 			callback(code);
 		} else {
-			console.warn(`[SteamClient] ${this.accountName} received code but no callback available.`);
+			console.warn('[SteamClient] Received code but no callback available');
 		}
 	}
 
@@ -221,7 +219,7 @@ export class SteamClient extends EventEmitter {
 				console.log('[SteamClient] Boosting started');
 			} else {
 				this.status = 'ONLINE';
-				console.log(`[SteamClient] ${this.accountName} stopped boosting.`);
+				console.log('[SteamClient] Boosting stopped');
 			}
 			this.emit('status', this.status);
 		}

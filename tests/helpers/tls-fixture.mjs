@@ -20,47 +20,32 @@ export async function createTlsFixture() {
 		await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 	};
 	try {
-		const candidates = process.env.OPENSSL_BINARY
-			? [process.env.OPENSSL_BINARY]
-			: [
-					'openssl',
-					...(process.platform === 'win32'
-						? ['C:/Program Files/OpenSSL-Win64/bin/openssl.exe']
-						: [])
-				];
-		for (let index = 0; index < candidates.length; index++) {
-			try {
-				await run(
-					candidates[index],
-					[
-						'req',
-						'-x509',
-						'-newkey',
-						'rsa:2048',
-						'-sha256',
-						'-nodes',
-						'-days',
-						'2',
-						'-keyout',
-						keyFile,
-						'-out',
-						certFile,
-						'-subj',
-						'/CN=localhost',
-						'-addext',
-						'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1',
-						'-addext',
-						'basicConstraints=critical,CA:TRUE',
-						'-addext',
-						'extendedKeyUsage=serverAuth'
-					],
-					{ windowsHide: true }
-				);
-				break;
-			} catch (failure) {
-				if (failure.code !== 'ENOENT' || index === candidates.length - 1) throw failure;
-			}
-		}
+		await run(
+			process.env.OPENSSL_BINARY || 'openssl',
+			[
+				'req',
+				'-x509',
+				'-newkey',
+				'rsa:2048',
+				'-sha256',
+				'-nodes',
+				'-days',
+				'2',
+				'-keyout',
+				keyFile,
+				'-out',
+				certFile,
+				'-subj',
+				'/CN=localhost',
+				'-addext',
+				'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1',
+				'-addext',
+				'basicConstraints=critical,CA:TRUE',
+				'-addext',
+				'extendedKeyUsage=serverAuth'
+			],
+			{ windowsHide: true }
+		);
 		return {
 			directory,
 			certFile,
