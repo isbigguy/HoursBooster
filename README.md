@@ -136,4 +136,11 @@ Steam integration and lifecycle checks are documented in
 [`STEAM_API_REVIEW.ru.md`](STEAM_API_REVIEW.ru.md). This includes the live QR-start
 check and the account-authentication steps that still require manual verification.
 
+After `pnpm build`, use `pnpm test:runtime` with Deno on PATH (or `DENO_BINARY`
+pointing to its executable). This starts its own temporary server/database and
+checks the page, linked styles/scripts, content types and rejected private paths.
+Set `LIVE_STEAM=1` to also check QR start/poll/cancel against Steam without signing
+in. The test never stops an existing instance. Windows static paths are normalized
+before the adapter parses them so CSS and JavaScript load correctly.
+
 ---
