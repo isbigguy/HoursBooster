@@ -42,7 +42,7 @@ export async function startQrSession(ownerId: string | null) {
 	) {
 		error(429, 'Too many active QR logins');
 	}
-	const agent = new Agent({ keepAlive: true });
+	const agent = new Agent({ keepAlive: true, minVersion: 'TLSv1.2', rejectUnauthorized: true });
 	const session = new LoginSession(EAuthTokenPlatformType.SteamClient, { agent });
 	session.loginTimeout = TTL;
 	const id = crypto.randomUUID();

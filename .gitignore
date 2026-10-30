@@ -1,4 +1,10 @@
 node_modules
+certs/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
 
 # Database
 *.db

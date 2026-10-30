@@ -26,7 +26,9 @@ export class SteamClient extends EventEmitter {
 		this.accountName = accountName;
 
 		const steamUserOptions: any = {
-			dataDirectory: null
+			dataDirectory: null,
+			// Also filter discovered CMs: protocol alone can still select raw TCP.
+			webCompatibilityMode: true
 		};
 		if (options?.dataDirectory !== undefined) {
 			steamUserOptions.dataDirectory = options.dataDirectory;

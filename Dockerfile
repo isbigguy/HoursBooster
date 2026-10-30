@@ -21,6 +21,7 @@ RUN pnpm build
 
 # Production stage
 FROM denoland/deno:2.9.8@sha256:a0d88a7fcbd44f062cba2748e19df67d30290ad12aa203c7c1e0b12462c483f0
+LABEL org.opencontainers.image.version="0.0.2"
 USER root
 WORKDIR /app
 RUN mkdir -p /data && chown deno:deno /data
@@ -31,11 +32,11 @@ COPY --from=builder --chown=deno:deno /app/node_modules ./node_modules
 COPY --from=builder --chown=deno:deno /app/.deno-deploy ./.deno-deploy
 COPY --from=builder --chown=deno:deno /app/drizzle ./drizzle
 COPY --from=builder --chown=deno:deno /app/scripts ./scripts
-ENV DATABASE_URL=file:/data/sqlite.db HOST=0.0.0.0 PORT=8000 BETTER_AUTH_TELEMETRY=0 DENO_DIR=/tmp/deno
+ENV DATABASE_URL=file:/data/sqlite.db HOST=0.0.0.0 PORT=8443 BETTER_AUTH_TELEMETRY=0 DENO_DIR=/tmp/deno
 USER deno
 
-# Expose port 8000
-EXPOSE 8000
+# Expose only the TLS listener; Compose publishes it on HTTPS port 443.
+EXPOSE 8443
 
 # Run with Deno
-CMD ["deno", "run", "--cached-only", "--no-prompt", "--allow-env", "--allow-net", "--allow-sys", "--allow-read=/app,/data", "--allow-write=/data", "--allow-ffi=/app/node_modules", "scripts/start.ts"]
+CMD ["deno", "run", "--cached-only", "--no-prompt", "--allow-env", "--allow-net", "--allow-sys", "--allow-read=/app,/data,/run/tls", "--allow-write=/data", "--allow-ffi=/app/node_modules", "scripts/start.ts"]

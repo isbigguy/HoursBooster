@@ -29,10 +29,11 @@ process.env.BETTER_AUTH_TELEMETRY = '0';
 
 export const auth = betterAuth({
 	telemetry: { enabled: false },
+	advanced: { useSecureCookies: true },
 	database: drizzleAdapter(db, {
 		provider: 'sqlite'
 	}),
 	secret: building ? 'build-only-placeholder-not-a-runtime-secret' : config.auth.secret,
-	baseURL: building ? 'http://localhost:8000' : config.auth.url,
+	baseURL: building ? 'https://localhost:8443' : config.auth.url,
 	plugins: [genericOAuth({ config: oidcConfig }), sveltekitCookies(getRequestEvent)]
 });

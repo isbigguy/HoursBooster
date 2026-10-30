@@ -27,6 +27,7 @@ function client() {
 test('real SteamUser accepts a client refresh token without mixing in the stored 2FA seed', async () => {
 	const instance = client();
 	try {
+		assert.equal(instance.client.options.webCompatibilityMode, true);
 		await Promise.all([instance.login(null, token(), seed), instance.login(null, token(), seed)]);
 		await tick();
 		assert.equal(instance.connectionAttempts, 1);

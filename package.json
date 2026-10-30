@@ -1,12 +1,13 @@
 {
 	"name": "vaporbooster",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"type": "module",
 	"packageManager": "pnpm@10.10.0",
 	"pnpm": {
 		"patchedDependencies": {
-			"steam-session@1.9.4": "patches/steam-session@1.9.4.patch"
+			"steam-session@1.9.4": "patches/steam-session@1.9.4.patch",
+			"steam-user@5.3.0": "patches/steam-user@5.3.0.patch"
 		},
 		"overrides": {
 			"@esbuild-kit/core-utils>esbuild": "0.28.1",
@@ -19,7 +20,7 @@
 		"generate": "pnpm dlx auth@1.7.14 generate --output ./src/lib/schema.ts --config ./src/lib/auth.ts",
 		"migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "vite build && node scripts/postbuild.mjs",
 		"preview": "vite preview",
 		"start": "deno run --cached-only --no-prompt --allow-env --allow-net --allow-sys --allow-read=. --allow-write=. --allow-ffi=./node_modules --env-file=.env scripts/start.ts",
 		"test": "node --experimental-test-module-mocks --test tests/*.test.mjs",

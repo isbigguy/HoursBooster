@@ -2,14 +2,23 @@ services:
   vaporbooster:
     build: .
     ports:
-      - '127.0.0.1:8000:8000'
+      - '${HTTPS_BIND_IP:-127.0.0.1}:443:8443'
     env_file:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL:-file:/data/sqlite.db}
       BETTER_AUTH_TELEMETRY: '0'
+      TLS_CERT_FILE: /run/tls/fullchain.pem
+      TLS_KEY_FILE: /run/tls/privkey.pem
+      PORT: '8443'
     volumes:
       - vaporbooster-data:/data
+      - type: bind
+        source: ${TLS_CERTS_DIR:-./certs}
+        target: /run/tls
+        read_only: true
+        bind:
+          create_host_path: false
     read_only: true
     cap_drop:
       - ALL

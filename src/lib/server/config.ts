@@ -1,9 +1,11 @@
 import { env } from '$env/dynamic/private';
+import { validateHttpsEnvironment } from '../../../scripts/https.mjs';
 
 export const config = {
 	auth: {
 		secret: env.BETTER_AUTH_SECRET,
-		url: env.BETTER_AUTH_URL
+		url: env.BETTER_AUTH_URL,
+		origin: env.ORIGIN
 	},
 	oidc: {
 		providerName: env.OIDC_PROVIDER_NAME,
@@ -27,6 +29,13 @@ export const isOidcEnabled = () => {
 };
 
 export function validateConfig() {
+	const origin = validateHttpsEnvironment({
+		ORIGIN: config.auth.origin,
+		BETTER_AUTH_URL: config.auth.url,
+		NODE_TLS_REJECT_UNAUTHORIZED: env.NODE_TLS_REJECT_UNAUTHORIZED
+	});
+	config.auth.origin = origin;
+	config.auth.url = origin;
 	if (!config.auth.secret || config.auth.secret.length < 32) {
 		throw new Error('BETTER_AUTH_SECRET must contain at least 32 characters');
 	}
@@ -36,13 +45,10 @@ export function validateConfig() {
 	if (!isOidcEnabled() && !config.general.allowAnonymous) {
 		throw new Error('Configure OIDC or explicitly enable ALLOW_ANONYMOUS for local use');
 	}
-	for (const value of [config.auth.url, config.oidc.discoveryUrl].filter(Boolean)) {
+	for (const value of [config.oidc.discoveryUrl].filter(Boolean)) {
 		const url = new URL(value!);
-		if (
-			url.protocol !== 'https:' &&
-			!(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
-		) {
-			throw new Error('Authentication URLs require HTTPS outside localhost');
+		if (url.protocol !== 'https:' || url.username || url.password) {
+			throw new Error('OIDC discovery requires HTTPS without URL credentials');
 		}
 	}
 }
