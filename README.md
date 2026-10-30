@@ -33,6 +33,8 @@
 
 ## Deploy
 
+For Debian 13, see the [Russian deployment guide](DEPLOY_DEBIAN13.ru.md).
+
 ### 1. Configure environment variables
 
 Copy the example file and set the required variables:
