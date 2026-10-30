@@ -7,13 +7,15 @@ import { tmpdir } from 'node:os';
 import { join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCipheriv } from 'node:crypto';
+import { createTlsFixture } from './helpers/tls-fixture.mjs';
 
 const root = new URL('../', import.meta.url);
 const scratchRoot = realpathSync(process.env.SECURITY_TEST_DIR || tmpdir());
 const scratch = mkdtempSync(join(scratchRoot, 'vaporbooster-security-'));
 process.env.DATABASE_URL = `file:${join(scratch, 'test.db').replaceAll('\\', '/')}`;
 process.env.BETTER_AUTH_SECRET = 'test-only-master-secret-0123456789abcdefghijk';
-process.env.BETTER_AUTH_URL = 'http://localhost:8000';
+process.env.BETTER_AUTH_URL = 'https://localhost:8443';
+process.env.ORIGIN = 'https://localhost:8443';
 process.env.ALLOW_ANONYMOUS = 'true';
 
 registerHooks({
@@ -113,7 +115,10 @@ function oidc(enabled) {
 function event(locals, fields = {}) {
 	const form = new FormData();
 	for (const [key, value] of Object.entries(fields)) form.set(key, value);
-	return { locals, request: new Request('http://localhost:8000/', { method: 'POST', body: form }) };
+	return {
+		locals,
+		request: new Request('https://localhost:8443/', { method: 'POST', body: form })
+	};
 }
 const status = (expected) => (failure) => failure.status === expected;
 async function account(id, userId = 'alice', extra = {}) {
@@ -191,7 +196,7 @@ test('page and layout serialize neither Steam credentials nor auth session token
 	for (const field of ['sharedSecret', 'refreshToken', 'iv', 'authTag', 'userId'])
 		assert.equal(field in data.accounts[0], false);
 	assert.equal(JSON.stringify(data).includes('not-for-client'), false);
-	const layoutData = await layout.load({ locals: alice, url: new URL('http://localhost:8000/') });
+	const layoutData = await layout.load({ locals: alice, url: new URL('https://localhost:8443/') });
 	assert.equal('session' in layoutData, false);
 	assert.equal(JSON.stringify(layoutData).includes('session-secret'), false);
 	await assert.rejects(page.load({ locals: anonymous }), status(401));
@@ -212,6 +217,39 @@ test('configuration refuses partial OIDC, implicit anonymous mode and weak maste
 	assert.throws(validateConfig, /32 characters/);
 	assert.throws(() => crypto.encrypt('token'), /strong/);
 	config.auth.secret = secret;
+});
+
+test('authentication configuration requires matching HTTPS origins, including localhost', () => {
+	const saved = { ...config.auth };
+	const discovery = config.oidc.discoveryUrl;
+	try {
+		for (const url of [
+			'',
+			'http://localhost:8443',
+			'https://name:password@localhost:8443',
+			'https://localhost:8443/path'
+		]) {
+			config.auth.url = url;
+			assert.throws(validateConfig, undefined, `Accepted unsafe auth URL ${url}`);
+		}
+		config.auth.url = saved.url;
+		for (const origin of [
+			'',
+			'http://localhost:8443',
+			'https://other.invalid',
+			'https://localhost:8443/path'
+		]) {
+			config.auth.origin = origin;
+			assert.throws(validateConfig, undefined, `Accepted unsafe origin ${origin}`);
+		}
+		config.auth.origin = saved.origin;
+		config.oidc.discoveryUrl = 'http://localhost/.well-known/openid-configuration';
+		assert.throws(validateConfig, /HTTPS/);
+	} finally {
+		Object.assign(config.auth, saved);
+		config.oidc.discoveryUrl = discovery;
+	}
+	validateConfig();
 });
 
 test('legacy tokens remain readable; new credentials authenticate ciphertext and migrate idle 2FA seeds', async () => {
@@ -351,8 +389,16 @@ test('QR errors are sanitized and cancellation requires ownership', async () => 
 
 test('confirmation renders active account-name markup as text', async () => {
 	const { createServer } = await import('vite');
-	const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+	const tls = await createTlsFixture();
+	const previous = {
+		TLS_CERT_FILE: process.env.TLS_CERT_FILE,
+		TLS_KEY_FILE: process.env.TLS_KEY_FILE
+	};
+	process.env.TLS_CERT_FILE = tls.certFile;
+	process.env.TLS_KEY_FILE = tls.keyFile;
+	let vite;
 	try {
+		vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
 		const { default: ConfirmModal } = await vite.ssrLoadModule(
 			'/src/lib/components/ui/ConfirmModal.svelte'
 		);
@@ -363,7 +409,12 @@ test('confirmation renders active account-name markup as text', async () => {
 		assert.ok(body.includes('&lt;img'));
 		assert.equal(body.includes('<img src=x'), false);
 	} finally {
-		await vite.close();
+		if (vite) await vite.close();
+		for (const [key, value] of Object.entries(previous)) {
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+		await tls.cleanup();
 	}
 });
 

@@ -4,6 +4,8 @@
 
 # vaporBooster
 
+Version **v0.0.2** — HTTPS-only. See [release changes](CHANGELOG.md).
+
 ### Simple, fast and reliable hour booster for the Steam platform.
 
 [![Docker](https://img.shields.io/badge/Docker-29.x-2263EC?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
@@ -55,6 +57,13 @@ Edit the `.env` file and paste the generated value:
 BETTER_AUTH_SECRET=<your_generated_secret>
 ```
 
+Replace `hours.example.com` in both `BETTER_AUTH_URL` and `ORIGIN` with your own
+HTTPS origin. Provide a valid certificate chain and private key using
+`TLS_CERT_FILE`/`TLS_KEY_FILE`. For Compose, place them in `certs/fullchain.pem`
+and `certs/privkey.pem` with read permissions for the container user; follow the
+Debian guide for ownership. Certificates and private keys are excluded from Git
+and image builds. Missing or invalid TLS credentials stop startup.
+
 ### 2. Start with Docker Compose
 
 Configure the OIDC variables below before starting. Authentication is required by default.
@@ -67,10 +76,11 @@ docker compose up -d
 
 ### 3. Access the application
 
-By default, the application will be available at: **http://localhost:8000**
+The application is available at **https://YOUR-DOMAIN** using the configured certificate.
 
-Compose binds only to `127.0.0.1`. For remote use, keep authentication enabled and
-put an HTTPS reverse proxy in front of the service. The database lives in the
+Compose publishes only HTTPS port 443 and binds to `127.0.0.1` by default.
+For public access, configure OIDC and explicitly set `HTTPS_BIND_IP=0.0.0.0`.
+Deno serves TLS directly; no internal HTTP or HTTP redirect is needed. The database lives in the
 `vaporbooster-data` volume and is initialized at runtime; no database or `.env`
 file is copied into the image.
 
@@ -126,6 +136,11 @@ the `/data/sqlite.db` volume location and ensure it is owned by the container's
 - Steam chat text is stored for the dashboard but is not printed to process logs.
 - Docker runs without root or extra capabilities, with a read-only root filesystem,
   a separate data volume and restricted Deno filesystem/process permissions.
+- Production, development and preview require HTTPS. Sessions use Secure cookies,
+  and HTTPS responses include HSTS. There is no HTTP fallback.
+- Steam account logins use TLS WebSockets with local server filtering, preventing
+  selection of the raw TCP transport. Passwords, Guard codes and tokens travel
+  through this encrypted connection; stored Steam tokens and seeds use AES-256-GCM.
 - Dependency versions and image digests are pinned. Outbound networking is still
   needed by Steam and the configured identity/database services; this is not a network allowlist.
 

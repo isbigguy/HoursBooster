@@ -1,4 +1,10 @@
 .git
+certs
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.crt
 .env
 .env.*
 *.env
@@ -16,4 +22,3 @@ screenshots
 tests
 outputs
 work
-!patches/**

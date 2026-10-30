@@ -3,10 +3,14 @@ import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { building } from '$app/environment';
 import { ready } from '$lib/server/setup';
 import type { Handle } from '@sveltejs/kit';
+import { config } from '$lib/server/config';
+import { error } from '@sveltejs/kit';
 
 import { createMockSession, createMockUser } from '$lib/server/mock';
 
 export const handle: Handle = async ({ event, resolve }) => {
+	if (!building && event.url.protocol !== 'https:') error(400, 'HTTPS is required');
+	if (!building && event.url.origin !== config.auth.origin) error(421, 'Unexpected request origin');
 	await ready;
 	const session = await auth.api.getSession({
 		headers: event.request.headers
@@ -27,5 +31,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	response.headers.set('Referrer-Policy', 'no-referrer');
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('X-Frame-Options', 'DENY');
+	response.headers.set('Strict-Transport-Security', 'max-age=31536000');
 	return response;
 };

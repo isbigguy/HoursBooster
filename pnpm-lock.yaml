@@ -14,6 +14,9 @@ patchedDependencies:
   steam-session@1.9.4:
     hash: 69620228b2be0ce610d2cb36b9eddedd36bf4ed49a8d98e9a1719a5663293817
     path: patches/steam-session@1.9.4.patch
+  steam-user@5.3.0:
+    hash: 5a43ff89ddba438709289a3931637cf935e9ac18ef41411774f018a051b8d558
+    path: patches/steam-user@5.3.0.patch
 
 importers:
 
@@ -45,7 +48,7 @@ importers:
         version: 2.1.2
       steam-user:
         specifier: 5.3.0
-        version: 5.3.0
+        version: 5.3.0(patch_hash=5a43ff89ddba438709289a3931637cf935e9ac18ef41411774f018a051b8d558)
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -3088,7 +3091,7 @@ snapshots:
 
   steam-totp@2.1.2: {}
 
-  steam-user@5.3.0:
+  steam-user@5.3.0(patch_hash=5a43ff89ddba438709289a3931637cf935e9ac18ef41411774f018a051b8d558):
     dependencies:
       '@bbob/parser': 2.9.0
       '@doctormckay/stdlib': 2.10.0
