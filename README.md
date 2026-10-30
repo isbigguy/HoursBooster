@@ -4,7 +4,7 @@
 
 # vaporBooster
 
-Version **v0.0.2** — HTTPS-only. See [release changes](CHANGELOG.md).
+Version **v0.0.3** — HTTPS-only. See [release changes](CHANGELOG.md).
 
 ### Simple, fast and reliable hour booster for the Steam platform.
 
@@ -145,6 +145,7 @@ the `/data/sqlite.db` volume location and ensure it is owned by the container's
   needed by Steam and the configured identity/database services; this is not a network allowlist.
 
 Use Node 24 to run `pnpm test`, `pnpm check`, `pnpm lint`, and `pnpm build`.
+TLS tests require OpenSSL on PATH, or `OPENSSL_BINARY` pointing to its executable.
 The security tests use a temporary SQLite database and fake Steam sessions, never
 real credentials or live Steam login. See `SECURITY_CHANGES.ru.md` for the Russian
 change summary and deployment limitations.

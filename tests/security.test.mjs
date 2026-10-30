@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, isAbsolute } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createCipheriv } from 'node:crypto';
 import { createTlsFixture } from './helpers/tls-fixture.mjs';
 
@@ -419,7 +419,7 @@ test('confirmation renders active account-name markup as text', async () => {
 });
 
 test('patched dependencies preserve Steam APIs and the Better Auth database schema', async () => {
-	const require = createRequire(import.meta.url);
+	const require = createRequire(import.meta.resolve('steam-user'));
 	const { EncryptedAppTicket } = require('steam-appticket/protobufs/generated/_load.js');
 	const bytes = EncryptedAppTicket.encode({
 		ticket_version_no: 1,
@@ -433,9 +433,12 @@ test('patched dependencies preserve Steam APIs and the Better Auth database sche
 	zip.addFile('test.txt', Buffer.from('test-only'));
 	const archive = new AdmZip(zip.toBuffer());
 	assert.equal(archive.readFile(archive.getEntries()[0]).toString(), 'test-only');
-	const cookie = require('cookie');
+	const cookie = createRequire(import.meta.resolve('@sveltejs/kit'))('cookie');
 	assert.equal(cookie.parse(cookie.serialize('session', 'test-only')).session, 'test-only');
-	const { getAuthTables } = await import('@better-auth/core/db');
+	const authRequire = createRequire(import.meta.resolve('better-auth'));
+	const { getAuthTables } = await import(
+		pathToFileURL(authRequire.resolve('@better-auth/core/db'))
+	);
 	const { getTableColumns } = await import('drizzle-orm');
 	const schema = await import('../src/lib/schema.ts');
 	for (const [name, table] of Object.entries(getAuthTables({}))) {
@@ -448,7 +451,7 @@ test(
 	'real Steam transport cancellation stops connecting sockets and rejects late connection work',
 	{ timeout: 5000 },
 	async (t) => {
-		const require = createRequire(import.meta.url);
+		const require = createRequire(import.meta.resolve('steam-session'));
 		const websocket = require('websocket13');
 		const Original = websocket.WebSocket;
 		const sockets = [];

@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { SteamClient } from '../src/lib/server/steam/client.ts';
 
 test('Steam discovery selects only TLS WebSockets on initial and repeated connections', async () => {
-	const require = createRequire(import.meta.url);
+	const require = createRequire(import.meta.resolve('steam-user'));
 	const websocket = require('websocket13');
 	const original = websocket.WebSocket;
 	const urls = [];

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.0.3
+
+- Generalize documentation examples and test-tool configuration for publication.
+- Resolve test dependencies through their owning packages for clean pnpm installs.
+
 ## v0.0.2
 
 - Require native HTTPS with an explicit domain/origin and certificate/private key.

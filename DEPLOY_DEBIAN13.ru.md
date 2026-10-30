@@ -1,4 +1,4 @@
-# v0.0.2: HTTPS на Debian 13
+# v0.0.3: HTTPS на Debian 13
 
 Сервис принимает только HTTPS. В контейнере Deno сам завершает TLS на порту 8443;
 Compose публикует его как 443. HTTP-порты 80 и 8000 не открываются, перенаправления
@@ -9,9 +9,10 @@ Compose публикует его как 443. HTTP-порты 80 и 8000 не о
 
 Установите Docker Engine и Compose по
 [официальной инструкции для Debian](https://docs.docker.com/engine/install/debian/).
+В команде клонирования замените `<OWNER>` владельцем репозитория.
 
 ```bash
-git clone https://github.com/isbigguy/HoursBooster.git
+git clone "https://github.com/<OWNER>/HoursBooster.git"
 cd HoursBooster
 umask 077
 cp example.env .env
@@ -97,5 +98,4 @@ HTTPS-адрес, включая порт. Для доверенного вну�
 и проверяет интерфейс, cookies, отказы HTTP/неверного сертификата и приватные пути.
 `LIVE_STEAM=1 pnpm test:runtime` дополнительно проверяет QR start/poll/cancel.
 
-Docker и Debian 13 в проверочной среде отсутствуют. Сам образ и запуск на Debian
-пока не проверены; успешный Deno-тест в Windows этого не заменяет.
+Сборка Docker-образа и запуск на Debian 13 пока не проверены.

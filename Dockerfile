@@ -21,7 +21,7 @@ RUN pnpm build
 
 # Production stage
 FROM denoland/deno:2.9.8@sha256:a0d88a7fcbd44f062cba2748e19df67d30290ad12aa203c7c1e0b12462c483f0
-LABEL org.opencontainers.image.version="0.0.2"
+LABEL org.opencontainers.image.version="0.0.3"
 USER root
 WORKDIR /app
 RUN mkdir -p /data && chown deno:deno /data

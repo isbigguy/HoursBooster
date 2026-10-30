@@ -1,4 +1,4 @@
-# Более безопасная версия vaporBooster — v0.0.2
+# Более безопасная версия vaporBooster — v0.0.3
 
 Основа: `valnssh/vaporBooster`, коммит `cc1e8f3b9179b70ca455cfdca63cabab3a550cfd`.
 
@@ -69,10 +69,10 @@
 sessions. Настоящие Steam credentials не используются. Также предусмотрены
 `pnpm check`, `pnpm lint`, `pnpm build`.
 
-В этой среде проверен production runtime в Deno с ограниченными разрешениями:
+Проверен production runtime в Deno с ограниченными разрешениями:
 инициализация новой БД, HTTPS-ответ панели, заголовок `no-store`, отсутствие
 Google Fonts/SteamDB и отказ действия для неизвестного аккаунта.
-Docker engine недоступен, поэтому Linux-образ и Compose здесь не запускались.
+Сборка Linux-образа и запуск через Compose пока не проверены.
 Вход в настоящий Steam и в реальный OIDC provider не проверялся.
 
 После обновлений npm audit не показывает high/critical advisories. Оставшиеся

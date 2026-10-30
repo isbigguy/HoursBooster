@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { Agent } from 'node:https';
 import { createRequire } from 'node:module';
 
-const { WebSocket, State } = createRequire(import.meta.url)('websocket13');
+const { WebSocket, State } = createRequire(import.meta.resolve('steam-session'))('websocket13');
 const [target, certificateFile] = Deno.args;
 const url = new URL(target);
 if (
