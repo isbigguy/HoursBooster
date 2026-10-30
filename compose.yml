@@ -2,7 +2,22 @@ services:
   vaporbooster:
     build: .
     ports:
-      - '8000:8000'
+      - '127.0.0.1:8000:8000'
     env_file:
       - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-file:/data/sqlite.db}
+      BETTER_AUTH_TELEMETRY: '0'
+    volumes:
+      - vaporbooster-data:/data
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     restart: unless-stopped
+
+volumes:
+  vaporbooster-data:

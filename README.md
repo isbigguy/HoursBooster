@@ -33,6 +33,8 @@
 
 ## Deploy
 
+For Debian 13, see the [Russian deployment guide](DEPLOY_DEBIAN13.ru.md).
+
 ### 1. Configure environment variables
 
 Copy the example file and set the required variables:
@@ -55,6 +57,10 @@ BETTER_AUTH_SECRET=<your_generated_secret>
 
 ### 2. Start with Docker Compose
 
+Configure the OIDC variables below before starting. Authentication is required by default.
+For a trusted local-only instance without OIDC, explicitly set `ALLOW_ANONYMOUS=true`.
+Partial OIDC configuration is rejected rather than falling back to anonymous access.
+
 ```bash
 docker compose up -d
 ```
@@ -63,15 +69,21 @@ docker compose up -d
 
 By default, the application will be available at: **http://localhost:8000**
 
+Compose binds only to `127.0.0.1`. For remote use, keep authentication enabled and
+put an HTTPS reverse proxy in front of the service. The database lives in the
+`vaporbooster-data` volume and is initialized at runtime; no database or `.env`
+file is copied into the image.
+
 ---
 
-## Authentication (Optional)
+## Authentication
 
-By default, the application **does not require authentication**. Anyone with access to the URL can use it.
+By default, the server refuses to operate without OIDC. Anonymous operation must
+be explicitly enabled and is intended only for a trusted local instance.
 
 ### Configure an OIDC provider
 
-If you want to add authentication, you can configure an OpenID Connect provider (such as [Keycloak](https://github.com/keycloak/keycloak), [Authentik](https://github.com/goauthentik/authentik), [Pocket ID](https://github.com/pocket-id/pocket-id), etc.) by adding the following variables to your `.env`:
+Configure an OpenID Connect provider by adding the following variables to your `.env`:
 
 ```env
 OIDC_PROVIDER_NAME=My Provider
@@ -82,6 +94,55 @@ OIDC_DISCOVERY_URL=https://your-provider/.well-known/openid-configuration
 ```
 
 > [!NOTE]
-> If you don't configure an OIDC provider, the application will work without authentication.
+> `OIDC_PROVIDER_NAME` is optional. The other four OIDC variables are required together.
+> With all OIDC variables absent, `ALLOW_ANONYMOUS=true` explicitly permits shared local access.
+> Never expose that mode to untrusted clients.
+
+The updated Better Auth uses the standard social-provider callback:
+`<BETTER_AUTH_URL>/api/auth/callback/<OIDC_PROVIDER_ID>`. Register this URI with
+your identity provider when upgrading from the old generic-OAuth endpoint.
+
+## Upgrading existing data
+
+Stop the old instance and back up its database before upgrading. Keep the same
+strong `BETTER_AUTH_SECRET`: existing refresh tokens still need the original key.
+Old token rows remain readable, while new tokens use versioned encryption.
+All legacy plaintext Steam Guard seeds, including idle accounts, are encrypted
+during initialization. Old database backups and SQLite pages may still contain
+previous plaintext; this migration is not secure erasure of historical copies.
+
+For a non-Docker installation, set `DATABASE_URL` to the existing SQLite file and
+run `pnpm migrate` before starting. The initial migration supports the original
+schema without dropping data. For Docker, import the backed-up SQLite file into
+the `/data/sqlite.db` volume location and ensure it is owned by the container's
+`deno` user before starting. Never build or publish an image containing live data.
+
+## Security changes and checks
+
+- Account operations share an ownership check, and page data excludes authentication secrets.
+- Confirmation messages render as text. QR sessions have a captured owner, expiry,
+  cancellation and bounded capacity; successful results can be consumed once.
+- No Google Fonts or SteamDB requests are made. Better Auth telemetry is explicitly disabled.
+- Steam chat text is stored for the dashboard but is not printed to process logs.
+- Docker runs without root or extra capabilities, with a read-only root filesystem,
+  a separate data volume and restricted Deno filesystem/process permissions.
+- Dependency versions and image digests are pinned. Outbound networking is still
+  needed by Steam and the configured identity/database services; this is not a network allowlist.
+
+Use Node 24 to run `pnpm test`, `pnpm check`, `pnpm lint`, and `pnpm build`.
+The security tests use a temporary SQLite database and fake Steam sessions, never
+real credentials or live Steam login. See `SECURITY_CHANGES.ru.md` for the Russian
+change summary and deployment limitations.
+
+Steam integration and lifecycle checks are documented in
+[`STEAM_API_REVIEW.ru.md`](STEAM_API_REVIEW.ru.md). This includes the live QR-start
+check and the account-authentication steps that still require manual verification.
+
+After `pnpm build`, use `pnpm test:runtime` with Deno on PATH (or `DENO_BINARY`
+pointing to its executable). This starts its own temporary server/database and
+checks the page, linked styles/scripts, content types and rejected private paths.
+Set `LIVE_STEAM=1` to also check QR start/poll/cancel against Steam without signing
+in. The test never stops an existing instance. Windows static paths are normalized
+before the adapter parses them so CSS and JavaScript load correctly.
 
 ---

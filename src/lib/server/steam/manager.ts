@@ -2,27 +2,62 @@ import { db } from '$lib/database';
 import { steamAccount, steamChatMessage } from '$lib/server/steam/schema';
 import { SteamClient, type SteamClientStatus } from './client';
 import { eq } from 'drizzle-orm';
-import { encrypt, decrypt } from './crypto';
+import { encrypt, decrypt, encryptSharedSecret, decryptSharedSecret } from './crypto';
 
 class SteamManager {
 	private clients: Map<string, SteamClient> = new Map();
+	private operations = new Map<string, Promise<void>>();
+
+	private async serialize(id: string, operation: () => Promise<void>) {
+		const previous = this.operations.get(id) ?? Promise.resolve();
+		const current = previous.catch(() => {}).then(operation);
+		this.operations.set(id, current);
+		try {
+			await current;
+		} finally {
+			if (this.operations.get(id) === current) this.operations.delete(id);
+		}
+	}
 
 	constructor() {}
 
 	public async init() {
 		console.log('[SteamManager] Initializing...');
 		const accounts = await db.select().from(steamAccount);
+		for (const account of accounts) {
+			if (!account.sharedSecret) continue;
+			let plaintext: string;
+			try {
+				plaintext = decryptSharedSecret(account.sharedSecret);
+			} catch {
+				// Reject the credential, without disabling login/deletion for every other account.
+				account.status = 'LOGIN_REQUIRED';
+				await db
+					.update(steamAccount)
+					.set({ status: 'LOGIN_REQUIRED' })
+					.where(eq(steamAccount.id, account.id));
+				continue;
+			}
+			if (!account.sharedSecret.startsWith('enc:')) {
+				account.sharedSecret = encryptSharedSecret(plaintext);
+				await db
+					.update(steamAccount)
+					.set({ sharedSecret: account.sharedSecret })
+					.where(eq(steamAccount.id, account.id));
+			}
+		}
 
 		for (const account of accounts) {
 			if (account.status === 'BOOSTING' || account.status === 'ONLINE') {
 				console.log(`[SteamManager] Auto-starting account: ${account.accountName}`);
-				this.startAccount(account.id, account);
+				await this.startAccount(account.id, account);
 			}
 		}
 	}
 
 	private setupClientListeners(id: string, client: SteamClient) {
 		client.on('status', async (status: SteamClientStatus) => {
+			if (this.clients.get(id) !== client) return;
 			const updates: Partial<typeof steamAccount.$inferInsert> = {
 				status: status as
 					| 'IDLE'
@@ -40,10 +75,15 @@ class SteamManager {
 				updates.latestBoostStartedAt = null;
 			}
 
-			await db.update(steamAccount).set(updates).where(eq(steamAccount.id, id));
+			try {
+				await db.update(steamAccount).set(updates).where(eq(steamAccount.id, id));
+			} catch {
+				console.error('[SteamManager] Failed to save account status');
+			}
 		});
 
 		client.on('refreshToken', async (key: string) => {
+			if (this.clients.get(id) !== client) return;
 			console.log(`[SteamManager] Received refreshToken event for ${id}. Saving...`);
 			const encrypted = encrypt(key);
 			try {
@@ -57,13 +97,14 @@ class SteamManager {
 					.where(eq(steamAccount.id, id));
 				console.log(`[SteamManager] Saved encrypted refresh token for account ${id}`);
 			} catch (e) {
-				console.error(`[SteamManager] Failed to save refresh token for ${id}`, e);
+				console.error('[SteamManager] Failed to save refresh token');
 			}
 		});
 
 		client.on(
 			'message',
 			async (data: { steamId: string; message: string; direction?: 'incoming' | 'outgoing' }) => {
+				if (this.clients.get(id) !== client) return;
 				try {
 					await db.insert(steamChatMessage).values({
 						accountId: id,
@@ -76,13 +117,18 @@ class SteamManager {
 						`[SteamManager] Saved ${data.direction || 'incoming'} message for account ${id}`
 					);
 				} catch (e) {
-					console.error(`[SteamManager] Failed to save message for ${id}`, e);
+					console.error('[SteamManager] Failed to save message');
 				}
 			}
 		);
 	}
 
 	public async startAccount(id: string, accountData?: any, ephemeralPassword?: string) {
+		return this.serialize(id, () => this.start(id, accountData, ephemeralPassword));
+	}
+
+	private async start(id: string, accountData?: any, ephemeralPassword?: string) {
+		if (this.clients.get(id)?.isActive) return;
 		let account = accountData;
 		if (!account) {
 			const accounts = await db.select().from(steamAccount).where(eq(steamAccount.id, id));
@@ -90,12 +136,15 @@ class SteamManager {
 		}
 		if (!account) return;
 
-		let client = this.clients.get(id);
-		if (!client) {
-			client = new SteamClient(account.accountName, { dataDirectory: null });
-			this.setupClientListeners(id, client);
-			this.clients.set(id, client);
+		const previous = this.clients.get(id);
+		if (previous) {
+			this.clients.delete(id);
+			previous.removeAllListeners();
+			await previous.logOff();
 		}
+		const client = new SteamClient(account.accountName, { dataDirectory: null });
+		this.clients.set(id, client);
+		this.setupClientListeners(id, client);
 
 		await db.update(steamAccount).set({ status: 'CONNECTING' }).where(eq(steamAccount.id, id));
 
@@ -113,7 +162,7 @@ class SteamManager {
 					});
 					console.log(`[SteamManager] Decryption successful.`);
 				} catch (e) {
-					console.error('[SteamManager] Failed to decrypt refresh token', e);
+					console.error('[SteamManager] Failed to decrypt refresh token');
 				}
 			} else {
 				console.log(
@@ -136,7 +185,11 @@ class SteamManager {
 				return;
 			}
 
-			await client.login(passwordToUse, refreshToken, account.sharedSecret);
+			await client.login(
+				passwordToUse,
+				refreshToken,
+				!refreshToken && account.sharedSecret ? decryptSharedSecret(account.sharedSecret) : null
+			);
 
 			if (account.personaState !== undefined) {
 				client.setPersonaState(account.personaState);
@@ -150,24 +203,29 @@ class SteamManager {
 				client.setGames(account.games || [], account.customTitle || undefined);
 			}
 		} catch (error) {
-			console.error(`[SteamManager] Failed to start account ${id}:`, error);
+			console.error('[SteamManager] Failed to start Steam account');
 			await db.update(steamAccount).set({ status: 'ERROR' }).where(eq(steamAccount.id, id));
 		}
 	}
 
 	public async stopAccount(id: string) {
-		const client = this.clients.get(id);
-		if (client) {
-			client.logOff();
-		}
+		return this.serialize(id, async () => {
+			const client = this.clients.get(id);
+			this.clients.delete(id);
+			if (client) {
+				client.removeAllListeners();
+				await client.logOff();
+			}
+			await db
+				.update(steamAccount)
+				.set({ status: 'IDLE', latestBoostStartedAt: null })
+				.where(eq(steamAccount.id, id));
+		});
 	}
 
 	public async stopAll() {
 		console.log('[SteamManager] Stopping all accounts...');
-		for (const [id, client] of this.clients.entries()) {
-			console.log(`[SteamManager] Stopping account ${id}`);
-			client.logOff();
-		}
+		await Promise.all([...this.clients.keys()].map((id) => this.stopAccount(id)));
 	}
 
 	public async submitCode(id: string, code: string) {

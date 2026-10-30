@@ -29,7 +29,7 @@
 		? ['var(--error)', 'var(--error-light)']
 		: ['var(--secondary)', 'var(--primary)']}
 >
-	<p class="message">{@html message}</p>
+	<p class="message">{message}</p>
 
 	<Button {variant} onclick={onConfirm} class="w-full">
 		{confirmText}
