@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 import { user } from '../../schema';
@@ -7,7 +7,7 @@ export const steamAccount = sqliteTable(
 	'steam_account',
 	{
 		id: text('id').primaryKey(),
-		accountName: text('account_name').notNull().unique(),
+		accountName: text('account_name').notNull(),
 		refreshToken: text('refresh_token'),
 		iv: text('iv'),
 		authTag: text('auth_tag'),
@@ -38,7 +38,15 @@ export const steamAccount = sqliteTable(
 			.$onUpdate(() => new Date())
 			.notNull()
 	},
-	(table) => [index('steam_account_user_id_idx').on(table.userId)]
+	(table) => [
+		index('steam_account_user_id_idx').on(table.userId),
+		uniqueIndex('steam_account_owner_name_unique')
+			.on(table.userId, table.accountName)
+			.where(sql`${table.userId} IS NOT NULL`),
+		uniqueIndex('steam_account_local_name_unique')
+			.on(table.accountName)
+			.where(sql`${table.userId} IS NULL`)
+	]
 );
 
 export const steamAccountRelations = relations(steamAccount, ({ one }) => ({

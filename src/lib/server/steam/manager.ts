@@ -49,7 +49,7 @@ class SteamManager {
 
 		for (const account of accounts) {
 			if (account.status === 'BOOSTING' || account.status === 'ONLINE') {
-				console.log(`[SteamManager] Auto-starting account: ${account.accountName}`);
+				console.log('[SteamManager] Auto-starting Steam account');
 				await this.startAccount(account.id, account);
 			}
 		}
@@ -84,7 +84,7 @@ class SteamManager {
 
 		client.on('refreshToken', async (key: string) => {
 			if (this.clients.get(id) !== client) return;
-			console.log(`[SteamManager] Received refreshToken event for ${id}. Saving...`);
+			console.log('[SteamManager] Saving refreshed credentials');
 			const encrypted = encrypt(key);
 			try {
 				await db
@@ -95,7 +95,7 @@ class SteamManager {
 						authTag: encrypted.authTag
 					})
 					.where(eq(steamAccount.id, id));
-				console.log(`[SteamManager] Saved encrypted refresh token for account ${id}`);
+				console.log('[SteamManager] Saved encrypted refresh token');
 			} catch (e) {
 				console.error('[SteamManager] Failed to save refresh token');
 			}
@@ -113,9 +113,7 @@ class SteamManager {
 						senderName: data.steamId, // TODO: Get actual name
 						direction: data.direction ?? 'incoming'
 					});
-					console.log(
-						`[SteamManager] Saved ${data.direction || 'incoming'} message for account ${id}`
-					);
+					console.log('[SteamManager] Saved Steam chat message');
 				} catch (e) {
 					console.error('[SteamManager] Failed to save message');
 				}
@@ -151,9 +149,7 @@ class SteamManager {
 		try {
 			let refreshToken: string | null = null;
 			if (account.refreshToken && account.iv && account.authTag) {
-				console.log(
-					`[SteamManager] Found encrypted refresh token for ${account.accountName}. Decrypting...`
-				);
+				console.log('[SteamManager] Decrypting stored credentials');
 				try {
 					refreshToken = decrypt({
 						content: account.refreshToken,
@@ -165,9 +161,7 @@ class SteamManager {
 					console.error('[SteamManager] Failed to decrypt refresh token');
 				}
 			} else {
-				console.log(
-					`[SteamManager] No refresh token found for ${account.accountName} (or missing IV/Tag).`
-				);
+				console.log('[SteamManager] Stored credentials are unavailable');
 			}
 
 			const passwordToUse = ephemeralPassword || null;
@@ -177,7 +171,7 @@ class SteamManager {
 			} else if (passwordToUse) {
 				console.log(`[SteamManager] Logging in with Ephemeral Password...`);
 			} else {
-				console.error(`[SteamManager] No credentials available for ${account.accountName}.`);
+				console.error('[SteamManager] Steam login requires credentials');
 				await db
 					.update(steamAccount)
 					.set({ status: 'LOGIN_REQUIRED' })
@@ -257,7 +251,7 @@ class SteamManager {
 			.where(eq(steamAccount.id, id));
 
 		if (client && client.status !== 'DISCONNECTED' && client.status !== 'ERROR') {
-			console.log(`[SteamManager] Updating live config for ${id}`);
+			console.log('[SteamManager] Updating Steam account configuration');
 			if (config.personaState !== undefined) client.setPersonaState(config.personaState);
 			if (config.autoReplyMessage !== undefined)
 				client.setAutoReply(config.autoReplyMessage || null);

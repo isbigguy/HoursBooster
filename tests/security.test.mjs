@@ -302,6 +302,33 @@ test('normal account addition encrypts 2FA and preserves the ephemeral password 
 	assert.equal(calls.at(-1)[3], 'test-only-password');
 });
 
+test('password and QR additions cannot reserve or reveal another owner account name', async () => {
+	await account('existing-alice', 'alice', { accountName: 'shared-synthetic-name' });
+	const add = (locals, accountName) =>
+		page.actions.addAccount(event(locals, { accountName, password: 'unverified-test-password' }));
+	const existing = await add(bob, 'shared-synthetic-name');
+	const fresh = await add(bob, 'fresh-synthetic-name');
+	assert.equal(existing, undefined);
+	assert.deepEqual(existing, fresh);
+	assert.equal((await page.load({ locals: alice })).accounts.length, 1);
+	assert.equal((await page.load({ locals: bob })).accounts.length, 2);
+	// Bob's unverified password attempt must not block Alice's confirmed QR result.
+	const started = await page.actions.startQrLogin(event(alice));
+	const session = FakeSession.instances.at(-1);
+	session.accountName = 'fresh-synthetic-name';
+	session.refreshToken = 'synthetic-qr-token';
+	session.emit('authenticated');
+	const result = await page.actions.pollQrLogin(event(alice, { sessionId: started.sessionId }));
+	assert.equal(result.success, true);
+	assert.equal((await page.load({ locals: alice })).accounts.length, 2);
+	assert.equal((await page.load({ locals: bob })).accounts.length, 2);
+	const duplicate = await add(bob, 'shared-synthetic-name');
+	assert.equal(duplicate.status, 500, 'Same-owner duplicates remain rejected');
+	oidc(false);
+	assert.equal(await add(anonymous, 'shared-synthetic-name'), undefined);
+	assert.equal((await add(anonymous, 'shared-synthetic-name')).status, 500);
+});
+
 test('a malformed legacy seed is rejected per account without disabling the dashboard', async () => {
 	await account('broken-seed', 'alice', { sharedSecret: 'enc:v1:not-json' });
 	await account('healthy-seed', 'alice', { sharedSecret: Buffer.alloc(20, 5).toString('base64') });

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.4
+
+- Scope Steam account-name uniqueness to each owner, with a separate shared-local
+  namespace. Migrate the old global index without changing existing account/chat data.
+- Remove Steam account identities and Guard email domains from lifecycle logs.
+- Add cross-owner password/QR, legacy migration and console privacy regressions.
+
 ## v0.0.3
 
 - Generalize documentation examples and test-tool configuration for publication.
