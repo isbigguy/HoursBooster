@@ -45,6 +45,8 @@ test('HTTP and unexpected authority are rejected before application work, regard
 		['https://hours.example.com:8443/', 421],
 		['https://hours.example.com/privkey.pem', 404],
 		['https://hours.example.com/certs/private-material', 404],
+		['https://hours.example.com/.private/full-stack/state.json', 404],
+		['https://hours.example.com/%2eprivate/full-stack/compose.env', 404],
 		['https://hours.example.com/privkey%2epem', 404]
 	]) {
 		const response = await handler(

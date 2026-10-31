@@ -7,8 +7,9 @@ import type { PageServerLoad, Actions } from './$types';
 import { requestOwnerId, ownerFilter, requireAccount, formText } from '$lib/server/access';
 import { startQrSession, takeQrResult, cancelQrSession } from '$lib/server/steam/session_store';
 import { encrypt, encryptSharedSecret } from '$lib/server/steam/crypto';
+import { isSteamLoginEnabled } from '$lib/server/config';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const ownerId = requestOwnerId(locals);
 	// Explicit projection: authentication material never becomes page data.
 	const accounts = await db
@@ -38,6 +39,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		messages[account.id] = rows.reverse();
 	}
 	return {
+		steamLoginEnabled: isSteamLoginEnabled(),
+		steamLinkStatus:
+			url?.searchParams.get('steam') === 'linked'
+				? 'linked'
+				: url?.searchParams.get('steam') === 'link_failed'
+					? 'failed'
+					: null,
 		user: locals.user,
 		accounts: accounts.map((account) => ({
 			...account,

@@ -9,7 +9,7 @@ export function isTlsAssetPath(pathname) {
 	} catch {
 		return true;
 	}
-	return /(?:^|\/)certs(?:\/|$)|\.(?:crt|pem|key|p12|pfx)(?:\/|$)/i.test(pathname);
+	return /(?:^|\/)(?:certs|\.private)(?:\/|$)|\.(?:crt|pem|key|p12|pfx)(?:\/|$)/i.test(pathname);
 }
 
 /** @param {string | undefined} value @param {string} name */

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.0.5
+
+- Add a Debian full-stack installer for HoursBooster, Keycloak, PostgreSQL and
+  Caddy on two HTTPS domains, including the initial realm, OIDC client and user.
+- Encrypt and verify proxy-to-backend and Keycloak-to-database connections;
+  publish only the proxy HTTPS port and keep generated credentials outside Git.
+- Add closed-allowlist Steam OpenID panel login and explicit linking to an
+  authenticated profile, separate from Steam password/Guard/QR account setup.
+- Validate browser-bound, expiring, single-use Steam assertions, provider
+  signatures and account ownership before creating a Secure panel session.
+
 ## v0.0.4
 
 - Scope Steam account-name uniqueness to each owner, with a separate shared-local
