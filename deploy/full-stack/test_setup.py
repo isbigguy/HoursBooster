@@ -52,6 +52,7 @@ class SetupTests(unittest.TestCase):
             env = (private / "compose.env").read_text()
             self.assertIn("HTTPS_BIND_IP='127.0.0.1'", env)
             self.assertIn("PROXY_IP='172.28.0.2'", env)
+            self.assertIn("EDGE_DYNAMIC_RANGE='172.28.0.128/25'", env)
             self.assertNotEqual(first["initial_password"], first["admin_password"])
             self.assertNotEqual(first["db_password"], first["postgres_password"])
             for key in ("auth_secret", "client_secret", "db_password", "postgres_password", "initial_password", "admin_password"):

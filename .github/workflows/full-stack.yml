@@ -3,7 +3,7 @@ name: HTTPS and authentication
 on:
   pull_request:
   push:
-    branches: [main, 'codex/full-stack-*']
+    branches: [main]
 
 permissions:
   contents: read

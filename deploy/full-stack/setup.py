@@ -160,6 +160,8 @@ def prepare(settings, private=PRIVATE, test=False, renew=False):
         **settings,
         "PRIVATE_DIR": private.resolve().as_posix(),
         "PROXY_IP": str(network.network_address + 2),
+        # Keep dynamic leases out of the statically assigned proxy address.
+        "EDGE_DYNAMIC_RANGE": str(list(network.subnets(new_prefix=25))[1]),
         "HTTPS_BIND_IP": "127.0.0.1" if test else "0.0.0.0",
         "BETTER_AUTH_SECRET": state["auth_secret"],
         "OIDC_CLIENT_SECRET": state["client_secret"],

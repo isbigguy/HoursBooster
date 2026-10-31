@@ -145,6 +145,7 @@ networks:
     ipam:
       config:
         - subnet: ${EDGE_SUBNET:?Run setup.py}
+          ip_range: ${EDGE_DYNAMIC_RANGE:?Run setup.py}
   database:
     internal: true
 
