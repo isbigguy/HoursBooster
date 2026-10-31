@@ -41,7 +41,14 @@ def main():
     def request(url, data=None, content_type='application/json'):
         parts = urllib.parse.urlsplit(url)
         headers = {'Origin': parts.scheme + '://' + parts.netloc, 'Content-Type': content_type}
-        return opener.open(urllib.request.Request(url, data=data, headers=headers), timeout=15)
+        try:
+            return opener.open(urllib.request.Request(url, data=data, headers=headers), timeout=15)
+        except urllib.error.HTTPError as error:
+            try:
+                code = json.loads(error.read(2048)).get('code', 'none')
+            except (ValueError, AttributeError):
+                code = 'none'
+            raise AssertionError(f'{parts.path}: HTTP {error.code}, error code {code}') from None
 
     for attempt in range(90):
         try:
@@ -105,6 +112,10 @@ def main():
         '-d', 'postgres', '-Atc', "SELECT rolsuper OR rolcreatedb OR rolcreaterole FROM pg_roles "
         "WHERE rolname='keycloak';"], check=True, capture_output=True, text=True)
     assert role.stdout.strip() == 'f', 'Keycloak must use a restricted database role'
+    plaintext = subprocess.run(COMPOSE + ['exec', '-T', '-e', 'PGSSLMODE=disable',
+        '-e', 'PGCONNECT_TIMEOUT=3', 'postgres', 'psql', '-h', '127.0.0.1', '-U', 'keycloak',
+        '-d', 'keycloak', '-Atc', 'SELECT 1'], capture_output=True, text=True)
+    assert plaintext.returncode != 0 and 'no encryption' in plaintext.stderr
     # Starting Steam login requires the correct origin and issues only a Steam URL.
     with request(HOURS + '/api/auth/link/steam', b'{}') as response:
         steam_url = json.load(response)['url']

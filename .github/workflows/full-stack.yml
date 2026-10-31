@@ -51,6 +51,7 @@ jobs:
       - name: Diagnostics for synthetic stack
         if: failure()
         run: |
+          sudo docker compose --project-name hoursbooster --env-file .private/full-stack/compose.env -f deploy/full-stack/compose.yml exec -T vaporbooster deno eval --no-config 'const r=await fetch("https://auth.test/realms/hours/.well-known/openid-configuration"); console.log("OIDC discovery from app:", r.status); if(r.ok) console.log("Issuer:", (await r.json()).issuer);' || true
           sudo docker compose --project-name hoursbooster --env-file .private/full-stack/compose.env -f deploy/full-stack/compose.yml ps -a
           sudo docker compose --project-name hoursbooster --env-file .private/full-stack/compose.env -f deploy/full-stack/compose.yml logs --tail=60
       - name: Stop synthetic services
