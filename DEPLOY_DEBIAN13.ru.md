@@ -12,7 +12,7 @@ Compose публикует его как 443. HTTP-порты 80 и 8000 не о
 В команде клонирования замените `<OWNER>` владельцем репозитория.
 
 ```bash
-git clone "https://github.com/<OWNER>/HoursBooster.git"
+git clone "https://github.com/isbigguy/HoursBooster.git"
 cd HoursBooster
 umask 077
 cp example.env .env
