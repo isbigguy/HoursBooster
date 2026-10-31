@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { request as httpRequest } from 'node:http';
-import { Agent, request as httpsRequest } from 'node:https';
+import { Agent, request as httpsRequest, createServer as createHttpsServer } from 'node:https';
 import { promisify } from 'node:util';
 import { createTlsFixture } from './helpers/tls-fixture.mjs';
 
@@ -73,6 +73,7 @@ function launch(overrides = {}, database = 'test.db') {
 				TLS_KEY_FILE: tls.keyFile,
 				BETTER_AUTH_TELEMETRY: '0',
 				ALLOW_ANONYMOUS: 'true',
+				STEAM_LOGIN_ENABLED: 'false',
 				OIDC_PROVIDER_NAME: '',
 				OIDC_PROVIDER_ID: '',
 				OIDC_CLIENT_ID: '',
@@ -165,6 +166,7 @@ async function rejectedStartup(overrides, name, beforeMigration = false) {
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 let running;
+let oidcStub;
 
 try {
 	await rejectedStartup({ TLS_CERT_FILE: '' }, 'missing-certificate', true);
@@ -423,11 +425,148 @@ try {
 		}
 		console.log('PASS: live Steam QR challenge, pending poll and cancellation; challenge omitted');
 	}
+
+	// Exercise real Deno TLS discovery and the production BetterAuth route, not an adapter mock.
+	if (running.child.exitCode === null) running.child.kill();
+	await running.closed;
+	const identityPort = await unusedPort();
+	const issuer = `https://127.0.0.1:${identityPort}/realms/synthetic`;
+	let discoveries = 0;
+	let identityReady = false;
+	const oidcKey = join(tls.directory, 'oidc-key.pem');
+	const oidcCsr = join(tls.directory, 'oidc.csr');
+	const oidcCert = join(tls.directory, 'oidc-cert.pem');
+	const oidcExtensions = join(tls.directory, 'oidc.ext');
+	await writeFile(
+		oidcExtensions,
+		'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost,IP:127.0.0.1\n'
+	);
+	await promisify(execFile)(
+		process.env.OPENSSL_BINARY || 'openssl',
+		[
+			'req',
+			'-new',
+			'-newkey',
+			'rsa:2048',
+			'-nodes',
+			'-keyout',
+			oidcKey,
+			'-out',
+			oidcCsr,
+			'-subj',
+			'/CN=localhost'
+		],
+		{ windowsHide: true }
+	);
+	await promisify(execFile)(
+		process.env.OPENSSL_BINARY || 'openssl',
+		[
+			'x509',
+			'-req',
+			'-in',
+			oidcCsr,
+			'-CA',
+			tls.certFile,
+			'-CAkey',
+			tls.keyFile,
+			'-set_serial',
+			'2',
+			'-days',
+			'2',
+			'-extfile',
+			oidcExtensions,
+			'-out',
+			oidcCert
+		],
+		{ windowsHide: true }
+	);
+	oidcStub = createHttpsServer(
+		{ key: await readFile(oidcKey), cert: await readFile(oidcCert) },
+		(req, res) => {
+			if (req.url !== '/realms/synthetic/.well-known/openid-configuration') {
+				res.writeHead(404).end();
+				return;
+			}
+			discoveries++;
+			if (!identityReady) {
+				res
+					.writeHead(503, { 'Content-Type': 'application/json' })
+					.end(JSON.stringify({ error: 'synthetic-startup-pending' }));
+				return;
+			}
+			res.writeHead(200, { 'Content-Type': 'application/json' }).end(
+				JSON.stringify({
+					issuer,
+					authorization_endpoint: `${issuer}/protocol/openid-connect/auth`,
+					token_endpoint: `${issuer}/protocol/openid-connect/token`,
+					userinfo_endpoint: `${issuer}/protocol/openid-connect/userinfo`,
+					jwks_uri: `${issuer}/protocol/openid-connect/certs`,
+					id_token_signing_alg_values_supported: ['RS256']
+				})
+			);
+		}
+	);
+	await new Promise((done, fail) => {
+		oidcStub.once('error', fail);
+		oidcStub.listen(identityPort, '127.0.0.1', done);
+	});
+	running = launch(
+		{
+			ALLOW_ANONYMOUS: 'false',
+			OIDC_PROVIDER_ID: 'synthetic',
+			OIDC_PROVIDER_NAME: 'Synthetic OIDC',
+			OIDC_CLIENT_ID: 'synthetic-client',
+			OIDC_CLIENT_SECRET: 'synthetic-client-secret',
+			OIDC_DISCOVERY_URL: `${issuer}/.well-known/openid-configuration`,
+			DENO_CERT: tls.certFile,
+			NODE_EXTRA_CA_CERTS: tls.certFile
+		},
+		'oidc.db'
+	);
+	for (let attempt = 0; attempt < 200; attempt++) {
+		if (running.launchError) throw running.launchError;
+		if (running.child.exitCode !== null) throw new Error(`OIDC Deno exited:\n${running.output}`);
+		if (running.output.includes(`Listening on ${base}`)) break;
+		await pause(100);
+	}
+	assert.ok(running.output.includes(`Listening on ${base}`), running.output);
+	const login = await request(`${origin}/login`);
+	assert.match(await login.text(), /Synthetic OIDC/);
+	assert.ok(discoveries > 0, 'Startup did not attempt HTTPS OIDC discovery');
+	identityReady = true;
+	const oidcStart = await request(`${origin}/api/auth/sign-in/social`, {
+		method: 'POST',
+		headers: { Origin: origin, 'Content-Type': 'application/json' },
+		body: JSON.stringify({ provider: 'synthetic', callbackURL: `${origin}/` })
+	});
+	assert.equal(
+		oidcStart.status,
+		200,
+		`OIDC initiation failed (${discoveries} discoveries): ${await oidcStart.text()}`
+	);
+	const authorization = new URL((await oidcStart.json()).url);
+	assert.equal(authorization.origin, new URL(issuer).origin);
+	assert.equal(authorization.pathname, '/realms/synthetic/protocol/openid-connect/auth');
+	assert.equal(
+		authorization.searchParams.get('redirect_uri'),
+		`${origin}/api/auth/callback/synthetic`
+	);
+	assert.equal(authorization.searchParams.get('code_challenge_method'), 'S256');
+	assert.ok(authorization.searchParams.get('state'));
+	assert.ok(authorization.searchParams.get('nonce'));
+	assert.ok(discoveries > 0, 'OIDC discovery never reached the verified HTTPS provider');
+	console.log(
+		'PASS: real Deno HTTPS OIDC discovery and sign-in route produce PKCE/nonce authorization'
+	);
 } finally {
 	// Only this test's child is stopped. No existing user service is queried or stopped.
 	if (running) {
 		if (running.child.exitCode === null) running.child.kill();
 		await running.closed;
+	}
+	if (oidcStub) {
+		oidcStub.closeAllConnections();
+		await new Promise((done) => oidcStub.close(done));
 	}
 	agent.destroy();
 	await tls.cleanup();

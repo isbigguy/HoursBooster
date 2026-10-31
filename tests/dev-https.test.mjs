@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer as createNetServer } from 'node:net';
 import { request as httpsRequest } from 'node:https';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -15,6 +15,11 @@ test('development HTTPS never serves public PEM or configured extensionless priv
 	const sourceRoot = join(root, 'src');
 	const keyDirectory = await mkdtemp(join(sourceRoot, 'tls-private-'));
 	const keyFile = join(keyDirectory, 'private-material');
+	const privateRoot = join(root, '.private');
+	await mkdir(privateRoot, { recursive: true });
+	const deploymentDirectory = await mkdtemp(join(privateRoot, 'test-private-'));
+	const deploymentFile = join(deploymentDirectory, 'state.json');
+	const canary = `synthetic-deployment-secret-${randomUUID()}`;
 	const publicName = `tls-review-${randomUUID()}.pem`;
 	const publicFile = join(root, 'static', publicName);
 	const previous = { ...process.env };
@@ -22,6 +27,7 @@ test('development HTTPS never serves public PEM or configured extensionless priv
 	try {
 		await writeFile(keyFile, tls.key);
 		await writeFile(publicFile, tls.key);
+		await writeFile(deploymentFile, JSON.stringify({ secret: canary }));
 		await assert.rejects(
 			readTlsOptions({ TLS_CERT_FILE: tls.certFile, TLS_KEY_FILE: publicFile }),
 			/public asset directories/
@@ -70,12 +76,15 @@ test('development HTTPS never serves public PEM or configured extensionless priv
 			`/${publicName}`,
 			`/${publicName.replace('.pem', '%2epem')}`,
 			`/@fs/${keyFile.replaceAll('\\', '/')}`,
-			`/${relative(root, keyFile).replaceAll('\\', '/')}?raw`
+			`/${relative(root, keyFile).replaceAll('\\', '/')}?raw`,
+			`/${relative(root, deploymentFile).replaceAll('\\', '/')}?raw`,
+			`/@fs/${deploymentFile.replaceAll('\\', '/')}`
 		]) {
 			const response = await get(path);
 			assert.notEqual(response.status, 200, path);
 			assert.equal(response.body.includes(tls.key.toString()), false);
 			assert.equal(response.body.includes('-----BEGIN PRIVATE KEY-----'), false);
+			assert.equal(response.body.includes(canary), false);
 		}
 	} finally {
 		await vite?.close();
@@ -85,6 +94,14 @@ test('development HTTPS never serves public PEM or configured extensionless priv
 		const child = relative(sourceRoot, keyDirectory);
 		assert.ok(child && !child.startsWith('..') && !isAbsolute(child));
 		await rm(keyDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		const privateChild = relative(privateRoot, deploymentDirectory);
+		assert.ok(privateChild && !privateChild.startsWith('..') && !isAbsolute(privateChild));
+		await rm(deploymentDirectory, {
+			recursive: true,
+			force: true,
+			maxRetries: 10,
+			retryDelay: 100
+		});
 		await tls.cleanup();
 	}
 });

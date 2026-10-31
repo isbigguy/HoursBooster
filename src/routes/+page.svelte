@@ -22,6 +22,18 @@
 	let accountToDelete: any | null = $state(null);
 	let accountToAuth: string | null = $state(null);
 	let interval: any;
+	let steamLinkError = $state(false);
+
+	async function handleSteamLink() {
+		steamLinkError = false;
+		try {
+			const response = await fetch('/api/auth/link/steam', { method: 'POST' });
+			if (!response.ok) throw new Error();
+			window.location.assign((await response.json()).url);
+		} catch {
+			steamLinkError = true;
+		}
+	}
 
 	async function handleLogout() {
 		await authClient.signOut();
@@ -84,12 +96,23 @@
 			</h1>
 		</div>
 		{#if data.authEnabled}
+			{#if data.steamLoginEnabled}
+				<Button onclick={handleSteamLink} variant="ghost">Link Steam sign-in</Button>
+			{/if}
 			<Button onclick={handleLogout} variant="ghost" class="logout-btn-override">
 				<Icon name="logout" />
 				Sign Out
 			</Button>
 		{/if}
 	</div>
+	{#if data.steamLinkStatus === 'linked'}
+		<p role="status">Steam sign-in is linked to this panel profile.</p>
+	{:else if data.steamLinkStatus === 'failed' || steamLinkError}
+		<p role="alert">
+			Steam sign-in could not be linked. Check the allowlist and make sure it is not linked to
+			another profile.
+		</p>
+	{/if}
 
 	<div class="stats-grid">
 		<StatCard label="Steam Accounts" value={data.accounts?.length || 0} staggerIndex={2}>

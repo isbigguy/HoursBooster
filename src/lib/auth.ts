@@ -6,6 +6,8 @@ import { getRequestEvent } from '$app/server';
 import { building } from '$app/environment';
 import { db } from './database';
 import { config, isOidcEnabled as isOidcConfigured } from '$lib/server/config';
+import { steamOpenId } from '$lib/server/steam/openid';
+export { isAuthEnabled, isSteamLoginEnabled } from '$lib/server/config';
 
 const oidcConfig = isOidcConfigured()
 	? [
@@ -23,17 +25,18 @@ export const isOidcEnabled = isOidcConfigured;
 export const getOidcProviderName = () => config.oidc.providerName || config.oidc.providerId || null;
 export const getOidcProviderId = () => config.oidc.providerId || null;
 
-export const isAuthEnabled = () => isOidcEnabled();
-
 process.env.BETTER_AUTH_TELEMETRY = '0';
 
 export const auth = betterAuth({
 	telemetry: { enabled: false },
+	// Provider and database errors can include account identifiers or assertions.
+	logger: { disabled: true },
 	advanced: { useSecureCookies: true },
+	account: { accountLinking: { disableImplicitLinking: true } },
 	database: drizzleAdapter(db, {
 		provider: 'sqlite'
 	}),
 	secret: building ? 'build-only-placeholder-not-a-runtime-secret' : config.auth.secret,
 	baseURL: building ? 'https://localhost:8443' : config.auth.url,
-	plugins: [genericOAuth({ config: oidcConfig }), sveltekitCookies(getRequestEvent)]
+	plugins: [genericOAuth({ config: oidcConfig }), steamOpenId(), sveltekitCookies(getRequestEvent)]
 });

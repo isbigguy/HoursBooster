@@ -4,7 +4,7 @@
 
 # vaporBooster
 
-Version **v0.0.4** — HTTPS-only. See [release changes](CHANGELOG.md).
+Version **v0.0.5** — HTTPS-only. See [release changes](CHANGELOG.md).
 
 ### Simple, fast and reliable hour booster for the Steam platform.
 
@@ -44,6 +44,11 @@ Version **v0.0.4** — HTTPS-only. See [release changes](CHANGELOG.md).
 ## Deploy
 
 For Debian 13, see the [Russian deployment guide](DEPLOY_DEBIAN13.ru.md).
+
+For a complete installation with Keycloak, PostgreSQL and a reverse proxy on two
+HTTPS domains, use the [full-stack installation guide](DEPLOY_FULL_STACK.ru.md).
+It provisions the OIDC client and first panel user automatically, and supports
+direct Steam sign-in through a private SteamID allowlist.
 
 ### 1. Configure environment variables
 
@@ -96,7 +101,7 @@ file is copied into the image.
 
 ## Authentication
 
-By default, the server refuses to operate without OIDC. Anonymous operation must
+By default, the server requires OIDC or explicitly configured Steam panel login. Anonymous operation must
 be explicitly enabled and is intended only for a trusted local instance.
 
 ### Configure an OIDC provider
@@ -119,6 +124,16 @@ OIDC_DISCOVERY_URL=https://your-provider/.well-known/openid-configuration
 The updated Better Auth uses the standard social-provider callback:
 `<BETTER_AUTH_URL>/api/auth/callback/<OIDC_PROVIDER_ID>`. Register this URI with
 your identity provider when upgrading from the old generic-OAuth endpoint.
+
+### Steam panel login
+
+Set `STEAM_LOGIN_ENABLED=true` and a comma-separated `STEAM_ALLOWED_IDS` allowlist
+in your private environment. The login page then offers Steam OpenID 2.0 alongside
+OIDC. Steam verifies ownership on its own HTTPS website; no Steam password is
+requested by the panel login. This does not connect an account for boosting.
+After signing in through Keycloak, use **Link Steam login** in the dashboard to
+make both login methods open the same profile. A separate first Steam login creates
+a separate profile; accounts are never merged by a guessed email address.
 
 ## Upgrading existing data
 

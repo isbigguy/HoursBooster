@@ -65,6 +65,7 @@ export default defineConfig(async ({ command, mode }) => {
 					'.env',
 					'.env.*',
 					'**/.git/**',
+					'**/.private/**',
 					'**/certs/**',
 					'**/*.{crt,pem,key,p12,pfx}',
 					...privatePaths

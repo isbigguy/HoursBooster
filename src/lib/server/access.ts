@@ -2,10 +2,10 @@ import { error } from '@sveltejs/kit';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '$lib/database';
 import { steamAccount } from './steam/schema';
-import { config, isOidcEnabled } from './config';
+import { config, isAuthEnabled } from './config';
 
 export function requestOwnerId(locals: App.Locals): string | null {
-	if (isOidcEnabled()) {
+	if (isAuthEnabled()) {
 		if (!locals.user || !locals.session) error(401, 'Authentication required');
 		return locals.user.id;
 	}

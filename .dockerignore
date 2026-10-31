@@ -1,4 +1,7 @@
 .git
+**/__pycache__
+**/*.py[cod]
+.private
 certs
 **/*.pem
 **/*.key
