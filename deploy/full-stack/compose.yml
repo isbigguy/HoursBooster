@@ -7,7 +7,10 @@ services:
       HOURS_DOMAIN: ${HOURS_DOMAIN:?Run setup.py}
       AUTH_DOMAIN: ${AUTH_DOMAIN:?Run setup.py}
     ports:
-      - '${HTTPS_BIND_IP:?Run setup.py}:443:8443'
+      - '${HTTPS_BIND_IP:?Run setup.py}:443:443'
+    # Namespaced network setting permits UID1000 to bind443 without capabilities.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: '0'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ${PRIVATE_DIR:?Run setup.py}/tls.conf:/etc/caddy/tls.conf:ro

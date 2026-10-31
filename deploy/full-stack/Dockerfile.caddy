@@ -1,4 +1,5 @@
 FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
-# Listen on 8443 without privileged capabilities; remove upstream file capability.
+# Compose permits binding443 in this network namespace without capabilities.
+# Remove the upstream file capability so cap_drop:ALL can execute this binary.
 RUN setcap -r /usr/bin/caddy && chown -R 1000:1000 /data /config
 USER 1000:1000

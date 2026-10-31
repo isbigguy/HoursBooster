@@ -17,6 +17,14 @@ class SetupTests(unittest.TestCase):
     def settings(self):
         return {"HOURS_DOMAIN": "hours.test", "AUTH_DOMAIN": "auth.test", "SERVER_IP": "127.0.0.1", "ACME_EMAIL": "operator@example.invalid", "STEAM_ALLOWED_IDS": "76561198000000001"}
 
+    def test_canonical_issuer_port_is_reachable_inside_docker(self):
+        directory = Path(__file__).parent
+        caddy = (directory / "Caddyfile").read_text()
+        compose = (directory / "compose.yml").read_text()
+        self.assertIn("https_port 443\n", caddy)
+        self.assertIn("}:443:443'", compose)
+        self.assertIn("net.ipv4.ip_unprivileged_port_start: '0'", compose)
+
     def test_untrusted_settings_are_rejected(self):
         for key, value in (("HOURS_DOMAIN", "https://hours.test"), ("AUTH_DOMAIN", "hours.test"), ("SERVER_IP", "0.0.0.0"), ("STEAM_ALLOWED_IDS", "YOUR_STEAMID64"), ("STEAM_ALLOWED_IDS", "76561198000000001,76561198000000001"), ("ACME_EMAIL", "x@example.invalid\nadmin off"), ("EDGE_SUBNET", "8.8.8.0/24")):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):

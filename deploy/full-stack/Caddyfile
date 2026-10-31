@@ -1,6 +1,7 @@
 {
 	admin off
-	https_port 8443
+	# Container DNS aliases must reach the same canonical HTTPS port as browsers.
+	https_port 443
 	auto_https disable_redirects
 	# HTTP error events can contain callback URLs and authentication cookies.
 	# TLS certificate diagnostics remain available; access logging stays disabled.
