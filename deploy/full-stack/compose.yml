@@ -9,22 +9,20 @@ services:
     logging: *logging
     build:
       context: .
-      dockerfile: Dockerfile.caddy
+      dockerfile: Dockerfile.nginx
     environment:
       HOURS_DOMAIN: ${HOURS_DOMAIN:?Run setup.py}
       AUTH_DOMAIN: ${AUTH_DOMAIN:?Run setup.py}
     ports:
+      - '${HTTPS_BIND_IP:?Run setup.py}:80:80'
       - '${HTTPS_BIND_IP:?Run setup.py}:443:443'
-    # Namespaced network setting permits UID1000 to bind443 without capabilities.
+    # Low ports are available to the non-root nginx user without capabilities.
     sysctls:
       net.ipv4.ip_unprivileged_port_start: '0'
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ${PRIVATE_DIR:?Run setup.py}/tls.conf:/etc/caddy/tls.conf:ro
+      - ${PRIVATE_DIR:?Run setup.py}/nginx.conf:/etc/nginx/nginx.conf:ro
       - ${PRIVATE_DIR}/pki/ca.pem:/run/ca/ca.pem:ro
-      - ${PRIVATE_DIR}/pki/proxy:/run/tls:ro
-      - proxy-data:/data
-      - proxy-config:/config
+      - ${CERTS_DIR:?Run setup.py}/nginx:/run/tls:ro
     networks:
       edge:
         ipv4_address: ${PROXY_IP:?Run setup.py}
@@ -166,5 +164,3 @@ volumes:
   app-data:
   keycloak-data:
   postgres-data:
-  proxy-data:
-  proxy-config:

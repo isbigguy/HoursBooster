@@ -4,7 +4,7 @@
 
 # vaporBooster
 
-Version **v0.0.5** — HTTPS-only. See [release changes](CHANGELOG.md).
+Version **v0.0.5** — HTTPS application; nginx redirects HTTP to HTTPS. See [release changes](CHANGELOG.md).
 
 ### Simple, fast and reliable hour booster for the Steam platform.
 
@@ -49,7 +49,9 @@ For Debian 13, see the [Russian deployment guide](DEPLOY_DEBIAN13.ru.md).
 For a complete installation with Keycloak, PostgreSQL and a reverse proxy on two
 HTTPS domains, use the [full-stack installation guide](DEPLOY_FULL_STACK.ru.md).
 It provisions the OIDC client and first panel user automatically, and supports
-direct Steam sign-in through a private SteamID allowlist.
+direct Steam sign-in through a private SteamID allowlist. The full stack uses nginx
+with supplied certificates in `certs/full-stack/nginx/`, including private-IP home VMs.
+Certificate issuance, DNS API credentials and Certbot renewal hooks are managed externally.
 
 ### 1. Configure environment variables
 

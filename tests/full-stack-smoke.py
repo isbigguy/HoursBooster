@@ -73,8 +73,21 @@ def main():
     except urllib.error.URLError as error:
         assert isinstance(error.reason, ssl.SSLCertVerificationError)
 
-    # No plaintext or directly exposed application/identity/database ports.
-    for port in (80, 8000, 8080, 8443, 5432):
+    # HTTP serves only a fixed HTTPS redirect; it never reaches the backends.
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+    http = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    for name in ('hours.test', 'auth.test'):
+        try:
+            http.open('http://' + name + '/login?probe=1', timeout=10)
+            raise AssertionError('HTTP was not redirected')
+        except urllib.error.HTTPError as error:
+            assert error.code == 308
+            assert error.headers['Location'] == 'https://' + name + '/login?probe=1'
+
+    # No directly exposed application/identity/database ports.
+    for port in (8000, 8080, 8443, 5432):
         with socket.socket() as sock:
             sock.settimeout(1)
             assert sock.connect_ex(('127.0.0.1', port)) != 0, f'Unexpected public port {port}'
@@ -126,6 +139,33 @@ def main():
         raise AssertionError('Cross-origin linking accepted')
     except urllib.error.HTTPError as error:
         assert error.code in (400, 403)
+    # Verify loading updated PEM files through the normal nginx config-test/reload commands.
+    import sys
+    import shutil
+    sys.path.insert(0, str(ROOT / 'deploy/full-stack'))
+    import setup as stack_setup
+    def peer_certificate():
+        with socket.create_connection(('127.0.0.1', 443), timeout=5) as connection:
+            with ctx.wrap_socket(connection, server_hostname='hours.test') as secured:
+                return secured.getpeercert(binary_form=True)
+    previous = peer_certificate()
+    stack_setup.leaf(PRIVATE / 'pki', 'proxy', ['hours.test', 'auth.test'], 101, renew=True)
+    public = PRIVATE / 'certs/nginx'
+    for name in ('fullchain.pem', 'privkey.pem'):
+        (public / name).chmod(0o600)
+        shutil.copyfile(PRIVATE / 'pki/proxy' / name, public / name)
+    stack_setup.verify_proxy_tls(state['settings'], PRIVATE / 'certs', PRIVATE / 'pki/ca.pem')
+    subprocess.run(COMPOSE + ['exec', '-T', 'proxy', 'nginx', '-t'], check=True)
+    subprocess.run(COMPOSE + ['exec', '-T', 'proxy', 'nginx', '-s', 'reload'], check=True)
+    for _ in range(30):
+        if peer_certificate() != previous:
+            break
+        time.sleep(0.2)
+    else:
+        raise AssertionError('nginx did not load the renewed certificate')
+    with request(HOURS + '/api/auth/get-session') as response:
+        assert json.load(response)['user']['id'] == session['user']['id']
+
     # Exercise the offline archive command in the actual read-only Deno image/data volume.
     subprocess.run(COMPOSE + ['stop', 'vaporbooster'], check=True)
     maintenance = COMPOSE + ['run', '--rm', '--no-deps', '-T', 'vaporbooster', 'deno']

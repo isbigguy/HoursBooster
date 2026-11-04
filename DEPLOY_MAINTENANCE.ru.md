@@ -12,7 +12,7 @@ dc logs --tail=50
 dc restart
 ```
 
-Перед обновлением сделайте **холодную копию** всех пяти томов и секретов.
+Перед обновлением сделайте **холодную копию** трёх рабочих томов, секретов и сертификатов.
 На время копирования панель и бустинг остановятся. Выполняйте блок целиком;
 при ошибке сначала устраните её, затем запустите `dc start`:
 
@@ -21,15 +21,15 @@ set -e
 backup="$PWD/.private/backup-$(date -u +%Y%m%dT%H%M%SZ)"
 sudo install -d -m 0700 "$backup"
 dc stop
-for pair in vaporbooster:app keycloak:keycloak postgres:postgres proxy:proxy; do
+for pair in vaporbooster:app keycloak:keycloak postgres:postgres; do
   service=${pair%%:*}; target=${pair##*:}
   case "$service" in
     vaporbooster) source=/data ;; keycloak) source=/opt/keycloak/data ;;
-    postgres) source=/var/lib/postgresql/data ;; proxy) source=/data ;;
+    postgres) source=/var/lib/postgresql/data ;;
   esac
   sudo docker cp -a "$(dc ps -aq "$service"):$source" "$backup/$target"
 done
-sudo docker cp -a "$(dc ps -aq proxy):/config" "$backup/proxy-config"
+sudo cp -a certs/full-stack "$backup/certificates"
 sudo cp -a .private/full-stack "$backup/private"
 git rev-parse HEAD | sudo tee "$backup/revision.txt" >/dev/null
 dc start
@@ -61,11 +61,32 @@ sudo python3 deploy/full-stack/setup.py --settings .private/full-stack/settings.
 сначала предпросмотр, затем явный перенос в проверенные gzip-файлы. Архивы сохраняются
 бессрочно; следите за суммарным местом (`df -h`).
 
+Выпуск и автоматическое продление публичного сертификата выполняет внешний Certbot.
+После обновления скопируйте обе PEM-копии в `certs/full-stack/nginx` с правами из
+инструкции установки. Затем выполните:
+
+```bash
+dc exec -T proxy nginx -t
+dc exec -T proxy nginx -s reload
+```
+
+Перезагрузка должна выполняться только после успешного `nginx -t`.
+Эти действия можно указать во внешнем deploy-hook Certbot; сам hook и настройки
+DNS API в репозиторий не входят. Для копии сертификатов выберите момент, когда
+внешний процесс продления не меняет PEM-файлы. При переносе проекта обновите
+внешние пути копирования и hook.
+
+При переходе со старого Caddy сначала сделайте копию по старой инструкции.
+Сохраните старые тома `proxy-data`/`proxy-config`: новый комплект их не использует
+и не удаляет. Пароли, OIDC realm и три тома данных сохраняются. Старый `SERVER_IP`
+можно убрать из настроек без изменения секретов. CI использует временный
+тестовый CA; публичные сертификаты и DNS API он не запрашивает.
+
 Если установка не завершилась: `dc ps -a`, `dc logs --tail=50`. Для сертификатов проверьте
-DNS only, обе A-записи и доступность 443 извне; для Keycloak — состояние postgres.
+локальный DNS, файлы сертификата и цепочку; для Keycloak — состояние postgres.
 Не отключайте проверку TLS и не публикуйте журналы с секретами/URL callback.
 
-Ссылки: [Keycloak и контейнеры](https://www.keycloak.org/server/containers),
+Ссылки: [nginx TLS](https://nginx.org/en/docs/http/ngx_http_ssl_module.html),
 [reverse proxy](https://www.keycloak.org/server/reverseproxy),
 [временный администратор](https://www.keycloak.org/server/bootstrap-admin-recovery),
 [ротация Docker](https://docs.docker.com/engine/logging/drivers/local/).
