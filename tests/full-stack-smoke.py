@@ -126,7 +126,51 @@ def main():
         raise AssertionError('Cross-origin linking accepted')
     except urllib.error.HTTPError as error:
         assert error.code in (400, 403)
-    print('Verified HTTPS proxy, closed ports, real Keycloak OIDC+PKCE, Secure session and Steam start.')
+    # Exercise the offline archive command in the actual read-only Deno image/data volume.
+    subprocess.run(COMPOSE + ['stop', 'vaporbooster'], check=True)
+    maintenance = COMPOSE + ['run', '--rm', '--no-deps', '-T', 'vaporbooster', 'deno']
+    subprocess.run(maintenance + ['eval', '''
+        import { createClient } from '@libsql/client';
+        const c = createClient({url: Deno.env.get('DATABASE_URL')});
+        await c.executeMultiple(`
+            INSERT INTO steam_account(id,account_name,refresh_token,created_at,updated_at)
+            VALUES('archive-ci','synthetic-archive','synthetic-token',1,1);
+            WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1002)
+            INSERT INTO steam_chat_message(account_id,steam_id_other,content,timestamp)
+            SELECT 'archive-ci','76561198000000001','synthetic-important-'||x,1 FROM n;
+        `);
+        c.close();
+    '''], check=True, capture_output=True, text=True)
+    archive = maintenance + ['run', '--cached-only', '--no-prompt', '--allow-env',
+        '--allow-sys', '--allow-read=/app,/data', '--allow-write=/data',
+        '--allow-ffi=/app/node_modules', 'scripts/archive-chat.mjs']
+    preview = subprocess.run(archive, check=True, capture_output=True, text=True)
+    assert json.loads(preview.stdout)['eligible'] == 2
+    archived = subprocess.run(archive + ['--apply'], check=True, capture_output=True, text=True)
+    assert json.loads(archived.stdout)['archived'] == 2
+    subprocess.run(maintenance + ['eval', '''
+        import { createClient } from '@libsql/client';
+        import { gunzipSync } from 'node:zlib';
+        const c = createClient({url:Deno.env.get('DATABASE_URL')});
+        const retained = await c.execute("SELECT count(*) AS n FROM steam_chat_message WHERE account_id='archive-ci'");
+        if(retained.rows[0].n !== 1000) throw Error('Recent messages lost');
+        let count=0;
+        for await(const f of Deno.readDir('/data/chat-archives')) {
+            if(!f.name.endsWith('.json.gz')) continue;
+            const path='/data/chat-archives/'+f.name;
+            const doc=JSON.parse(gunzipSync(await Deno.readFile(path)).toString());
+            if(doc.account.id!=='archive-ci'||doc.account.user_id!==null) throw Error('Owner changed');
+            if(doc.messages.some(m=>!m.content.startsWith('synthetic-important-'))) throw Error('Text changed');
+            if((await Deno.stat(path)).mode % 512 !== 384) throw Error('Archive permissions');
+            count+=doc.messages.length;
+        }
+        if(count!==2) throw Error('Archive incomplete');
+        const token=await c.execute("SELECT refresh_token FROM steam_account WHERE id='archive-ci'");
+        if(token.rows[0].refresh_token!=='synthetic-token') throw Error('Credential changed');
+        c.close();
+    '''], check=True, capture_output=True, text=True)
+    subprocess.run(COMPOSE + ['start', 'vaporbooster'], check=True)
+    print('Verified HTTPS, real OIDC+PKCE, Secure session, Steam start and lossless Deno chat archival.')
 
 
 if __name__ == '__main__':
