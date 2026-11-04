@@ -41,6 +41,13 @@ test('old database upgrades preserve mixed-case rows, credentials and chat with 
 			before
 		);
 		assert.deepEqual((await client.execute('SELECT * FROM steam_chat_message')).rows, chat);
+		const plan = await client.execute({
+			sql: 'EXPLAIN QUERY PLAN SELECT * FROM steam_chat_message WHERE account_id = ? ORDER BY timestamp DESC LIMIT 50',
+			args: ['upper']
+		});
+		const details = plan.rows.map((row) => row.detail).join('\n');
+		assert.match(details, /USING INDEX steam_chat_account_timestamp_idx/);
+		assert.doesNotMatch(details, /SCAN steam_chat_message|USE TEMP B-TREE/);
 		const indexes = (await client.execute("PRAGMA index_list('steam_account')")).rows.map(
 			(row) => row.name
 		);

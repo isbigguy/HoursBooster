@@ -1,5 +1,10 @@
 services:
   vaporbooster:
+    logging:
+      driver: local
+      options:
+        max-size: '10m'
+        max-file: '3'
     build: .
     ports:
       - '${HTTPS_BIND_IP:-127.0.0.1}:443:8443'

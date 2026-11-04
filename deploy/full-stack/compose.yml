@@ -1,5 +1,12 @@
+x-logging: &logging
+  driver: local
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   proxy:
+    logging: *logging
     build:
       context: .
       dockerfile: Dockerfile.caddy
@@ -31,6 +38,7 @@ services:
     restart: unless-stopped
 
   vaporbooster:
+    logging: *logging
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -65,6 +73,7 @@ services:
     restart: unless-stopped
 
   keycloak:
+    logging: *logging
     build:
       context: .
       dockerfile: Dockerfile.keycloak
@@ -101,6 +110,7 @@ services:
     restart: unless-stopped
 
   postgres:
+    logging: *logging
     build:
       context: .
       dockerfile: Dockerfile.postgres

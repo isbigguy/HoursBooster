@@ -17,11 +17,12 @@ Version **v0.0.5** — HTTPS-only. See [release changes](CHANGELOG.md).
 
 ---
 
-## Editors and contributors
+## Contributors
 
 - **[valnssh/vaporBooster](https://github.com/valnssh/vaporBooster)** — original project.
 - **Codex (OpenAI)** — AI coding assistant used to prepare this fork's security
-  review and hardening, HTTPS configuration, Steam integration fixes and regression tests.
+  review and hardening, HTTPS configuration, Steam integration fixes, Linux deployment
+  documentation, database query optimization and regression tests.
 
 ---
 
