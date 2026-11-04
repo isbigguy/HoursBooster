@@ -77,10 +77,10 @@ def main():
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args, **kwargs):
             return None
-    http = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    http_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     for name in ('hours.test', 'auth.test'):
         try:
-            http.open('http://' + name + '/login?probe=1', timeout=10)
+            http_opener.open('http://' + name + '/login?probe=1', timeout=10)
             raise AssertionError('HTTP was not redirected')
         except urllib.error.HTTPError as error:
             assert error.code == 308
