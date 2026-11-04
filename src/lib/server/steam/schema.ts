@@ -56,18 +56,22 @@ export const steamAccountRelations = relations(steamAccount, ({ one }) => ({
 	})
 }));
 
-export const steamChatMessage = sqliteTable('steam_chat_message', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	accountId: text('account_id')
-		.notNull()
-		.references(() => steamAccount.id, { onDelete: 'cascade' }),
-	steamIdOther: text('steam_id_other').notNull(),
-	senderName: text('sender_name'),
-	content: text('content').notNull(),
-	direction: text('direction', { enum: ['incoming', 'outgoing'] })
-		.notNull()
-		.default('incoming'),
-	timestamp: integer('timestamp', { mode: 'timestamp' })
-		.notNull()
-		.default(sql`(unixepoch())`)
-});
+export const steamChatMessage = sqliteTable(
+	'steam_chat_message',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		accountId: text('account_id')
+			.notNull()
+			.references(() => steamAccount.id, { onDelete: 'cascade' }),
+		steamIdOther: text('steam_id_other').notNull(),
+		senderName: text('sender_name'),
+		content: text('content').notNull(),
+		direction: text('direction', { enum: ['incoming', 'outgoing'] })
+			.notNull()
+			.default('incoming'),
+		timestamp: integer('timestamp', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`)
+	},
+	(table) => [index('steam_chat_account_timestamp_idx').on(table.accountId, table.timestamp)]
+);
