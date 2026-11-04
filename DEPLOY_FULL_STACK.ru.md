@@ -25,7 +25,7 @@ Docker публикует порты в обход некоторых прави
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl git python3 openssl nano
+sudo apt-get install -y ca-certificates curl git python3 openssl nano less
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 sudo chmod a+r /etc/apt/keyrings/docker.asc
@@ -103,7 +103,8 @@ sudo less .private/full-stack/credentials.txt
    **Account security → Signing in → Password → Update**.
 3. Откройте `https://ВАШ-AUTH_DOMAIN/admin/`, войдите как **bootstrap-admin** со вторым
    паролем. В левом верхнем переключателе выберите realm **master**.
-4. **Users → Add user**: задайте своё имя администратора, включите Enabled, нажмите Create.
+4. **Users → Add user**: заполните Username, Email, First name, Last name,
+   включите Enabled и нажмите Create.
    На вкладке **Credentials → Set password** задайте уникальный пароль,
    отключите Temporary и сохраните. **Role mapping → Assign role → Filter by realm roles**:
    выберите **admin**, нажмите Assign.
